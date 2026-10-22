@@ -551,12 +551,18 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# CAMINHOS E CARREGAMENTO
+# CAMINHOS E CARREGAMENTO (Compatível com Local e Nuvem)
 # =============================================================================
 
-CAMINHO_ESCOLAS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v1_super_tabela_escolas.csv"
-CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
-CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
+# Verifica se está no ambiente Local (Windows) ou na Nuvem (Streamlit Cloud)
+if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
+    # Caminhos para uso Local no PC
+    CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
+    CAMINHO_TECNICOS = r"C:\Ferramenta_Censo\v2_super_tabela_cursos_tecnicos.parquet"
+else:
+    # Caminhos para uso na Nuvem (GitHub / Streamlit Cloud)
+    CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
+    CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
 def carregar_tabela_escolas(caminho_parquet, data_modificacao):
@@ -568,7 +574,11 @@ def carregar_tabela_escolas(caminho_parquet, data_modificacao):
 def carregar_tabela_tecnicos(caminho, data_modificacao):
     con = duckdb.connect()
     try:
-        df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
+        # Se for ficheiro Parquet
+        if caminho.endswith('.parquet'):
+            df = con.execute(f"SELECT * FROM read_parquet('{caminho}')").df()
+        else:
+            df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
         df.columns = df.columns.str.strip().str.upper()
     finally:
         con.close()
@@ -586,7 +596,7 @@ def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
         con.close()
 
 if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
-    st.error("ERRO: O arquivo Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
+    st.error(f"ERRO: O ficheiro Parquet das escolas ({CAMINHO_ESCOLAS_PARQUET}) ou o ficheiro de cursos técnicos ({CAMINHO_TECNICOS}) não foi encontrado.")
     st.stop()
 
 DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
