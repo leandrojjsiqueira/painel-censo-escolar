@@ -551,29 +551,31 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# CAMINHOS E CARREGAMENTO (Compatível com Local e Nuvem)
+# CAMINHOS E CARREGAMENTO (Otimizado para poupar RAM na Nuvem)
 # =============================================================================
 
 if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
-    # Caminhos no seu Computador (Local)
     CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
 else:
-    # Caminhos na Nuvem (Streamlit Cloud / GitHub)
     CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
-def carregar_tabela_escolas(caminho_parquet, data_modificacao):
-    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
-    df.columns = df.columns.str.strip().str.upper()
+def carregar_tabela_escolas(caminho_parquet):
+    # Usando DuckDB para carregar de forma eficiente e otimizada em memória
+    con = duckdb.connect()
+    try:
+        df = con.execute(f"SELECT * FROM read_parquet('{caminho_parquet}')").df()
+        df.columns = df.columns.str.strip().str.upper()
+    finally:
+        con.close()
     return df
 
 @st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
-def carregar_tabela_tecnicos(caminho, data_modificacao):
+def carregar_tabela_tecnicos(caminho):
     con = duckdb.connect()
     try:
-        # Detecta automaticamente se é parquet (nuvem) ou csv (local)
         if caminho.endswith('.parquet'):
             df = con.execute(f"SELECT * FROM read_parquet('{caminho}')").df()
         else:
@@ -583,31 +585,18 @@ def carregar_tabela_tecnicos(caminho, data_modificacao):
         con.close()
     return df
 
-@st.cache_data(show_spinner=False)
-def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
-    con = duckdb.connect()
-    try:
-        sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
-        if where_clause:
-            sql += f" WHERE {where_clause}"
-        return con.execute(sql).df()
-    finally:
-        con.close()
-
 if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
     st.error(f"ERRO: Ficheiro não encontrado. Escolas: {CAMINHO_ESCOLAS_PARQUET} | Técnicos: {CAMINHO_TECNICOS}")
     st.stop()
 
-DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
-DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
-
 try:
-    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
-    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
+    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET)
+    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS)
 except Exception as e:
-    st.error("Erro ao carregar os dados:")
+    st.error("Erro crítico ao carregar os dados na memória:")
     st.exception(e)
     st.stop()
+
 
 # =============================================================================
 # TÍTULO E ABAS GLOBAIS
