@@ -550,37 +550,36 @@ def converter_df_para_excel(df):
         df_tratado.to_excel(writer, index=False, sheet_name='Relatorio')
     return output.getvalue()
 
+import traceback
+
 # =============================================================================
-# CAMINHOS E CARREGAMENTO (Compatível com Local e Nuvem)
+# CAMINHOS E CARREGAMENTO (Compatível com Local e Nuvem + Captura de Erros)
 # =============================================================================
-
-# Verifica se está no ambiente Local (Windows) ou na Nuvem (Streamlit Cloud)
-if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
-    # Caminhos Locais (No seu PC)
-    CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
-    CAMINHO_TECNICOS = r"C:\Ferramenta_Censo\v2_super_tabela_cursos_tecnicos.parquet"
-else:
-    # Caminhos na Nuvem (Streamlit Cloud / GitHub)
-    CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
-    CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
-
-# Validação estrita para evitar paragens abruptas
-if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-    st.error(f"ERRO: Ficheiro de escolas não encontrado: {CAMINHO_ESCOLAS_PARQUET}")
-    st.stop()
-
-if not os.path.exists(CAMINHO_TECNICOS):
-    st.error(f"ERRO: Ficheiro de cursos técnicos não encontrado: {CAMINHO_TECNICOS}")
-    st.stop()
-
-DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
-DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
 try:
-    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
-    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
+    if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
+        # Caminhos Locais (No seu PC)
+        CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
+        CAMINHO_TECNICOS = r"C:\Ferramenta_Censo\v2_super_tabela_cursos_tecnicos.parquet"
+    else:
+        # Caminhos na Nuvem (Streamlit Cloud / GitHub)
+        CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
+        CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
+
+    # Validação dos ficheiros
+    if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+        st.error(f"ERRO: Ficheiro de escolas não encontrado: {CAMINHO_ESCOLAS_PARQUET}")
+        st.stop()
+
+    if not os.path.exists(CAMINHO_TECNICOS):
+        st.error(f"ERRO: Ficheiro de cursos técnicos não encontrado: {CAMINHO_TECNICOS}")
+        st.stop()
+
+    DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
+    DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
+
 except Exception as e:
-    st.error("Erro ao carregar os dados:")
-    st.exception(e)
+    st.error("❌ Ocorreu um erro crítico ao iniciar a aplicação:")
+    st.code(traceback.format_exc())
     st.stop()
 
 # =============================================================================
