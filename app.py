@@ -189,14 +189,14 @@ def formatar_legenda_filtros(ano_inicio, ano_fim, municipio_sel, nre_sel, dep_se
     texto_base = f"Evolução de {ano_inicio} a {ano_fim}"
     
     partes_filtros = []
-    if nre_sel and nre_sel not in ["Todos", "Todas"]:
-        partes_filtros.append(f"NRE: {nre_sel}")
+    if nre_sel:
+        partes_filtros.append(f"NRE: {', '.join(nre_sel)}")
     if municipio_sel and municipio_sel not in ["Todas", "Todos"]:
         partes_filtros.append(f"Município: {municipio_sel}")
     if dep_sel:
-        partes_filtros.append(f"Rede: {', '.join(dep_sel) if isinstance(dep_sel, list) else dep_sel}")
-    if loc_sel and loc_sel not in ["Todas", "Todos"]:
-        partes_filtros.append(f"Localização: {loc_sel}")
+        partes_filtros.append(f"Rede: {', '.join(dep_sel)}")
+    if loc_sel:
+        partes_filtros.append(f"Localização: {', '.join(loc_sel)}")
         
     if itens_metricas:
         if len(itens_metricas) == 1:
@@ -210,302 +210,128 @@ def formatar_legenda_filtros(ano_inicio, ano_fim, municipio_sel, nre_sel, dep_se
         return f"{texto_base} - {' | '.join(partes_filtros)}"
     return texto_base
 
-def criar_filtro_checkboxes(titulo, opcoes, chave, default=None, valor_padrao=None):
-    if not opcoes:
-        return []
-
-    if isinstance(opcoes, dict):
-        opcoes_lista = list(opcoes.values())
+def criar_filtro_checkboxes(titulo, opcoes_entrada, key_prefix, valor_padrao=None, desabilitado=False):
+    if isinstance(opcoes_entrada, list):
+        dicionario_opcoes = {str(op): str(op) for op in opcoes_entrada}
     else:
-        opcoes_lista = list(opcoes)
+        dicionario_opcoes = opcoes_entrada
 
-    opcoes_lista = list(dict.fromkeys(opcoes_lista))
+    if key_prefix not in st.session_state:
+        st.session_state[key_prefix] = list(valor_padrao) if valor_padrao is not None else []
 
-    estado_chave = f"{chave}__estado"
-    todos_chave = f"{chave}__todos"
+    selecionados_confirmados = list(st.session_state.get(key_prefix, []))
+    
+    selecionados_confirmados = [s for s in selecionados_confirmados if s in dicionario_opcoes.values()]
+    st.session_state[key_prefix] = selecionados_confirmados
 
-    if valor_padrao is not None:
-        inicial = valor_padrao
-    elif default is not None:
-        inicial = default
-    else:
-        inicial = []
+    qtd_sel = len(selecionados_confirmados)
+    label_popover = f"{titulo} ({qtd_sel} sel.) *" if qtd_sel > 0 else f"{titulo} *"
 
-    if estado_chave not in st.session_state:
-        st.session_state[estado_chave] = [
-            x for x in list(inicial) if x in opcoes_lista
-        ]
-
-    selecionados = [
-        x for x in st.session_state[estado_chave]
-        if x in opcoes_lista
-    ]
-
-    todos_atual = (
-        len(selecionados) == len(opcoes_lista)
-        and len(opcoes_lista) > 0
+    help_text = (
+        f"Opções confirmadas em {titulo}:\n- " + "\n- ".join(selecionados_confirmados)
+        if selecionados_confirmados
+        else f"Nenhuma opção confirmada para {titulo}."
     )
 
-    with st.popover(titulo):
-        todos_novo = st.checkbox(
-            "Todos",
-            value=todos_atual,
-            key=todos_chave
+    try:
+        container = st.popover(
+            label_popover,
+            help=help_text,
+            disabled=desabilitado,
+            use_container_width=True
         )
+    except AttributeError:
+        container = st.expander(label_popover)
 
-        if todos_novo != todos_atual:
-            selecionados = opcoes_lista.copy() if todos_novo else []
-            st.session_state[estado_chave] = selecionados
+    if desabilitado:
+        with container:
+            st.info("Outro grupo de métricas já está ativo.")
+        return selecionados_confirmados
 
-            for i in range(len(opcoes_lista)):
-                st.session_state[f"{chave}__item_{i}"] = todos_novo
-
-        st.markdown("---")
-
-        novos_selecionados = []
-
-        for i, opcao in enumerate(opcoes_lista):
-            item_key = f"{chave}__item_{i}"
-
-            if item_key not in st.session_state:
-                st.session_state[item_key] = opcao in selecionados
-
-            marcado = st.checkbox(
-                str(opcao),
-                key=item_key
+    with container:
+        if selecionados_confirmados:
+            st.caption(
+                "ℹ️ **Itens confirmados:** "
+                + ", ".join(selecionados_confirmados[:10])
+                + ("..." if len(selecionados_confirmados) > 10 else "")
             )
 
-            if marcado:
-                novos_selecionados.append(opcao)
+        opcoes_filtradas = dicionario_opcoes
+        if len(dicionario_opcoes) > 15:
+            termo_busca = st.text_input(
+                "🔎 Pesquisar no filtro:",
+                key=f"search_{key_prefix}",
+                placeholder="Digite para buscar..."
+            )
+            if termo_busca:
+                opcoes_filtradas = {
+                    k: v for k, v in dicionario_opcoes.items()
+                    if termo_busca.lower() in v.lower()
+                }
 
-        st.session_state[estado_chave] = novos_selecionados
+        selecionados_rascunho = []
 
-    return st.session_state[estado_chave]
+        for k, rotulo in opcoes_filtradas.items():
+            widget_key = f"cb_{key_prefix}_{k}"
 
-def criar_filtro_selectbox(titulo, opcoes, key, valor_padrao="Todas"):
-    opcoes = list(opcoes)
+            if widget_key not in st.session_state:
+                st.session_state[widget_key] = rotulo in selecionados_confirmados
 
-    if not opcoes:
-        opcoes = [valor_padrao]
+            if st.checkbox(rotulo, key=widget_key):
+                selecionados_rascunho.append(rotulo)
 
-    valor_atual = st.session_state.get(key, valor_padrao)
+        selecionados_rascunho += [
+            r for r in selecionados_confirmados
+            if r not in opcoes_filtradas.values() and r not in selecionados_rascunho
+        ]
 
-    if valor_atual not in opcoes:
-        valor_atual = valor_padrao if valor_padrao in opcoes else opcoes[0]
-        st.session_state[key] = valor_atual
-
-    return st.selectbox(
-        titulo,
-        options=opcoes,
-        index=opcoes.index(valor_atual),
-        key=key,
-        help=f"Selecione uma opção ou '{valor_padrao}' para incluir todos"
-    )
+        resultado_final = list(dict.fromkeys(selecionados_rascunho))
+        st.session_state[key_prefix] = resultado_final
+        return resultado_final
 
 
-def get_opcoes_cruzadas_completas(
-    df_in,
-    nre_sel=None,
-    mun_sel=None,
-    dep_sel=None,
-    loc_sel=None,
-    cod_sel=None,
-    nome_sel=None
-):
-    nre_ativo = (
-        nre_sel
-        if nre_sel not in [None, "", "Todas", "Todos"]
-        else None
-    )
-    dep_sel = list(dep_sel or [])
-    
-    loc_ativo = (
-        loc_sel
-        if loc_sel not in [None, "", "Todas", "Todos"]
-        else None
-    )
-
-    mun_ativo = (
-        mun_sel
-        if mun_sel not in [None, "", "Todas", "Todos"]
-        else None
-    )
-
-    cod_ativo = (
-        str(cod_sel).split(".")[0].strip()
-        if cod_sel not in [None, "", "Todos"]
-        else None
-    )
-
-    nome_ativo = (
-        str(nome_sel).strip()
-        if nome_sel not in [None, "", "Todas", "Todos"]
-        else None
-    )
-
-    def aplicar_filtros(exceto=None):
-        df = df_in
-
-        if exceto != "nre" and nre_ativo is not None and "NO_NRE" in df.columns:
-            df = df[
-                df["NO_NRE"].astype(str).str.strip() == nre_ativo
-            ]
-
-        if exceto != "mun" and mun_ativo is not None and "NO_MUNICIPIO" in df.columns:
-            df = df[
-                df["NO_MUNICIPIO"].astype(str).str.strip() == mun_ativo
-            ]
-
-        if exceto != "dep" and dep_sel and "TP_DEPENDENCIA" in df.columns:
-            deps_ids = [
-                str(d).split(" - ")[0].strip()
-                for d in dep_sel
-            ]
-            df = df[
-                df["TP_DEPENDENCIA"]
-                .astype(str)
-                .str.split(".")
-                .str[0]
-                .str.strip()
-                .isin(deps_ids)
-            ]
-
-        if exceto != "loc" and loc_ativo is not None and "TP_LOCALIZACAO" in df.columns:
-            loc_id = str(loc_ativo).split(" - ")[0].strip()
-            df = df[
-                df["TP_LOCALIZACAO"]
-                .astype(str)
-                .str.split(".")
-                .str[0]
-                .str.strip() == loc_id
-            ]
-
-        if exceto != "cod" and cod_ativo is not None and "CO_ENTIDADE" in df.columns:
-            df = df[
-                df["CO_ENTIDADE"]
-                .astype(str)
-                .str.split(".")
-                .str[0]
-                .str.strip() == cod_ativo
-            ]
-
-        if exceto != "nome" and nome_ativo is not None and "NO_ENTIDADE" in df.columns:
-            df = df[
-                df["NO_ENTIDADE"]
-                .astype(str)
-                .str.strip() == nome_ativo
-            ]
-
+def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=None, loc_sel=None, cod_sel=None, nome_sel=None):
+    """Função de cruzamento total e bidirecional para todos os campos (NRE ⇄ Município ⇄ Rede ⇄ Localização ⇄ Escola)"""
+    def aplicar_filtros_exceto(exceto=None):
+        df = df_in.copy()
+        if exceto != "nre" and nre_sel and len(nre_sel) > 0 and "NO_NRE" in df.columns:
+            df = df[df["NO_NRE"].astype(str).str.strip().isin(nre_sel)]
+        if exceto != "mun" and mun_sel and mun_sel not in ["Todas", "Todos"] and "NO_MUNICIPIO" in df.columns:
+            df = df[df["NO_MUNICIPIO"].astype(str).str.strip() == mun_sel]
+        if exceto != "dep" and dep_sel and len(dep_sel) > 0 and "TP_DEPENDENCIA" in df.columns:
+            deps_ids = [str(d.split(' - ')[0]) for d in dep_sel]
+            df = df[df["TP_DEPENDENCIA"].astype(str).str.split('.').str[0].str.strip().isin(deps_ids)]
+        if exceto != "loc" and loc_sel and len(loc_sel) > 0 and "TP_LOCALIZACAO" in df.columns:
+            locs_ids = [str(l.split(' - ')[0]) for l in loc_sel]
+            df = df[df["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip().isin(locs_ids)]
+        if exceto != "esc" and cod_sel and cod_sel != "Todos" and "CO_ENTIDADE" in df.columns:
+            c_limpo = str(cod_sel).split('.')[0].strip()
+            df = df[df["CO_ENTIDADE"].astype(str).str.split('.').str[0].str.strip() == c_limpo]
+        elif exceto != "esc" and nome_sel and nome_sel not in ["Todas", "Todos"] and "NO_ENTIDADE" in df.columns:
+            df = df[df["NO_ENTIDADE"].astype(str).str.strip() == nome_sel]
         return df
 
-    # NRE
-    df_nre = aplicar_filtros("nre")
-    op_nre = (
-        sorted(
-            df_nre["NO_NRE"]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .unique()
-        )
-        if "NO_NRE" in df_nre.columns
-        else []
-    )
+    df_nre = aplicar_filtros_exceto("nre")
+    op_nre = sorted(df_nre["NO_NRE"].dropna().astype(str).str.strip().unique()) if "NO_NRE" in df_nre.columns else []
 
-    # Município
-    df_mun = aplicar_filtros("mun")
-    op_mun = (
-        sorted(
-            df_mun["NO_MUNICIPIO"]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .unique()
-        )
-        if "NO_MUNICIPIO" in df_mun.columns
-        else []
-    )
+    df_mun = aplicar_filtros_exceto("mun")
+    op_mun = sorted(df_mun["NO_MUNICIPIO"].dropna().astype(str).str.strip().unique()) if "NO_MUNICIPIO" in df_mun.columns else []
 
-    # Rede
-    df_dep = aplicar_filtros("dep")
-    op_dep = (
-        sorted(
-            df_dep["TP_DEPENDENCIA"]
-            .dropna()
-            .astype(str)
-            .str.split(".")
-            .str[0]
-            .str.strip()
-            .unique()
-        )
-        if "TP_DEPENDENCIA" in df_dep.columns
-        else []
-    )
+    df_dep = aplicar_filtros_exceto("dep")
+    op_dep = sorted(df_dep["TP_DEPENDENCIA"].dropna().astype(str).str.split('.').str[0].str.strip().unique()) if "TP_DEPENDENCIA" in df_dep.columns else []
 
-    # Localização
-    df_loc = aplicar_filtros("loc")
-    op_loc = (
-        sorted(
-            df_loc["TP_LOCALIZACAO"]
-            .dropna()
-            .astype(str)
-            .str.split(".")
-            .str[0]
-            .str.strip()
-            .unique()
-        )
-        if "TP_LOCALIZACAO" in df_loc.columns
-        else []
-    )
+    df_loc = aplicar_filtros_exceto("loc")
+    op_loc = sorted(df_loc["TP_LOCALIZACAO"].dropna().astype(str).str.split('.').str[0].str.strip().unique()) if "TP_LOCALIZACAO" in df_loc.columns else []
 
-    # Código INEP
-    df_cod = aplicar_filtros("cod")
-    op_cod = (
-        sorted(
-            df_cod["CO_ENTIDADE"]
-            .dropna()
-            .astype(str)
-            .str.split(".")
-            .str[0]
-            .str.strip()
-            .unique()
-        )
-        if "CO_ENTIDADE" in df_cod.columns
-        else []
-    )
+    df_esc = aplicar_filtros_exceto("esc")
+    op_cod = sorted(df_esc["CO_ENTIDADE"].dropna().astype(str).str.split('.').str[0].str.strip().unique()) if "CO_ENTIDADE" in df_esc.columns else []
+    op_nome = sorted(df_esc["NO_ENTIDADE"].dropna().astype(str).str.strip().unique()) if "NO_ENTIDADE" in df_esc.columns else []
 
-    # Nome da Escola
-    df_nome = aplicar_filtros("nome")
-    op_nome = (
-        sorted(
-            df_nome["NO_ENTIDADE"]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .unique()
-        )
-        if "NO_ENTIDADE" in df_nome.columns
-        else []
-    )
+    dic_dep = {k: v for k, v in MAP_DEPENDENCIA.items() if k in op_dep}
+    dic_loc = {k: v for k, v in MAP_LOCALIZACAO.items() if k in op_loc}
 
-    dic_dep = {
-        k: v for k, v in MAP_DEPENDENCIA.items()
-        if k in op_dep
-    }
+    return {op: op for op in op_nre}, ["Todas"] + op_mun, dic_dep, dic_loc, ["Todos"] + op_cod, ["Todas"] + op_nome
 
-    dic_loc = {
-        k: v for k, v in MAP_LOCALIZACAO.items()
-        if k in op_loc
-    }
-
-    return (
-        ["Todas"] + op_nre,
-        ["Todas"] + op_mun,
-        dic_dep,
-        ["Todas"] + list(dic_loc.values()),
-        ["Todos"] + op_cod,
-        ["Todas"] + op_nome
-    )
 
 def sql_int_safe(coluna):
     return f"TRY_CAST(SPLIT_PART(TRIM(CAST({coluna} AS VARCHAR)), '.', 1) AS INTEGER)"
@@ -554,9 +380,17 @@ def converter_df_para_excel(df):
 # CAMINHOS E CARREGAMENTO
 # =============================================================================
 
-CAMINHO_ESCOLAS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v1_super_tabela_escolas.csv"
-CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
-CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
+PASTA_APP = os.path.dirname(os.path.abspath(__file__))
+
+CAMINHO_ESCOLAS_PARQUET = os.path.join(
+    PASTA_APP,
+    "v1_super_tabela_escolas.parquet"
+)
+
+CAMINHO_TECNICOS_PARQUET = os.path.join(
+    PASTA_APP,
+    "v2_super_tabela_cursos_tecnicos.parquet"
+)
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
 def carregar_tabela_escolas(caminho_parquet, data_modificacao):
@@ -565,13 +399,9 @@ def carregar_tabela_escolas(caminho_parquet, data_modificacao):
     return df
 
 @st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
-def carregar_tabela_tecnicos(caminho, data_modificacao):
-    con = duckdb.connect()
-    try:
-        df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
-        df.columns = df.columns.str.strip().str.upper()
-    finally:
-        con.close()
+def carregar_tabela_tecnicos(caminho_parquet, data_modificacao):
+    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
+    df.columns = df.columns.str.strip().str.upper()
     return df
 
 @st.cache_data(show_spinner=False)
@@ -585,32 +415,43 @@ def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
     finally:
         con.close()
 
-if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
-    st.error("ERRO: O arquivo Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
+if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+    st.error(f"ERRO: Arquivo não encontrado: {CAMINHO_ESCOLAS_PARQUET}")
+    st.stop()
+
+if not os.path.exists(CAMINHO_TECNICOS_PARQUET):
+    st.error(f"ERRO: Arquivo não encontrado: {CAMINHO_TECNICOS_PARQUET}")
     st.stop()
 
 DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
-DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
+DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS_PARQUET)
 
 try:
-    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
-    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
+    df_escolas_raw = carregar_tabela_escolas(
+        CAMINHO_ESCOLAS_PARQUET,
+        DATA_MOD_ESCOLAS
+    )
+
+    df_tecnicos_raw = carregar_tabela_tecnicos(
+        CAMINHO_TECNICOS_PARQUET,
+        DATA_MOD_TECNICOS
+    )
+
 except Exception as e:
     st.error("Erro ao carregar os dados:")
     st.exception(e)
     st.stop()
 
 # =============================================================================
-# TÍTULO E ABAS GLOBAIS
+# TÍTULO E APENAS 2 ABAS GLOBAIS
 # =============================================================================
 
 st.title("🏫 Sistema de Consulta - Microdados do Censo Escolar")
 st.markdown("---")
 
-aba_escolas, aba_tecnicos, aba_obs = st.tabs([
+aba_escolas, aba_tecnicos = st.tabs([
     "🏛️ Super Tabela Escolas",
-    "🎓 Cursos Técnicos",
-    "⚠️ Observações e Limitações"
+    "🎓 Cursos Técnicos"
 ])
 
 # =============================================================================
@@ -632,60 +473,62 @@ with aba_escolas:
                         st.session_state.pop(k, None)
             st.rerun()
 
-        default_ano_a1 = ["2025"]
-        anos_estado_key_a1 = "ano_esc_a1__estado"
-        if anos_estado_key_a1 not in st.session_state:
-            st.session_state[anos_estado_key_a1] = default_ano_a1
-        ano_esc_val_temp = st.session_state.get(anos_estado_key_a1, default_ano_a1)
+        with st.form("form_filtros_a1", clear_on_submit=False):
+            st.markdown("##### Localização e Identificação da Escola")
+            c1, c2, c3, c4, c5 = st.columns([1, 2, 2, 2, 2])
+            with c1:
+                ano_esc = criar_filtro_checkboxes("Ano(s) do Censo", ANOS_ESCOLAS_DIC, "ano_esc_a1", valor_padrao=["2025"])
 
-        if "NU_ANO_CENSO" in df_escolas_raw.columns and ano_esc_val_temp:
-            df_esc_ano = df_escolas_raw[df_escolas_raw["NU_ANO_CENSO"].astype(str).str.split('.').str[0].str.strip().isin(ano_esc_val_temp)]
-        else:
-            df_esc_ano = df_escolas_raw
+            if "NU_ANO_CENSO" in df_escolas_raw.columns and ano_esc:
+                df_esc_ano = df_escolas_raw[df_escolas_raw["NU_ANO_CENSO"].astype(str).str.split('.').str[0].str.strip().isin(ano_esc)]
+            else:
+                df_esc_ano = df_escolas_raw
 
-        cur_nre_p1 = st.session_state.get("nre_esc_a1", "Todas")
-        cur_mun_p1 = st.session_state.get("mun_esc_sel_a1", "Todas")
-        cur_dep_p1 = st.session_state.get("dep_esc_a1", [])
-        cur_loc_p1 = st.session_state.get("loc_esc_a1", "Todas")
+            cur_nre_p1 = st.session_state.get("nre_esc_a1", [])
+            cur_mun_p1 = st.session_state.get("mun_esc_sel_a1", "Todas")
+            cur_dep_p1 = st.session_state.get("dep_esc_a1", [])
+            cur_loc_p1 = st.session_state.get("loc_esc_a1", [])
 
-        # Verifica se o NRE mudou para resetar o município automaticamente em tempo real
-        if "last_nre_esc_a1" not in st.session_state:
-            st.session_state["last_nre_esc_a1"] = cur_nre_p1
-        elif st.session_state["last_nre_esc_a1"] != cur_nre_p1:
-            st.session_state["mun_esc_sel_a1"] = "Todas"
-            st.session_state["last_nre_esc_a1"] = cur_nre_p1
-            st.rerun()
+            op_nre_p1, op_mun_p1, op_dep_p1, op_loc_p1, _, _ = get_opcoes_cruzadas_completas(
+                df_esc_ano, nre_sel=cur_nre_p1, mun_sel=cur_mun_p1, dep_sel=cur_dep_p1, loc_sel=cur_loc_p1
+            )
 
-        op_nre_p1, op_mun_p1, op_dep_p1, op_loc_p1, _, _ = get_opcoes_cruzadas_completas(
-            df_esc_ano, nre_sel=cur_nre_p1, mun_sel=cur_mun_p1, dep_sel=cur_dep_p1, loc_sel=cur_loc_p1
-        )
+            with c2:
+                nre_esc = criar_filtro_checkboxes("Núcleo Regional", op_nre_p1, "nre_esc_a1")
+            with c3:
+                mun_val_p1 = cur_mun_p1 if cur_mun_p1 in op_mun_p1 else "Todas"
+                mun_esc = st.selectbox("Município", options=op_mun_p1, index=op_mun_p1.index(mun_val_p1), key="mun_esc_sel_a1", help="Selecione um município ou 'Todas' para incluir todos")
+            with c4:
+                dep_esc = criar_filtro_checkboxes("Rede", op_dep_p1, "dep_esc_a1")
+            with c5:
+                loc_esc = criar_filtro_checkboxes("Localização", op_loc_p1, "loc_esc_a1")
 
-        st.markdown("##### Localização e Identificação da Escola")
-        c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 1.5, 2])
-        with c1:
-            nre_esc = criar_filtro_selectbox("Núcleo Regional", op_nre_p1, "nre_esc_a1", "Todas")
-        with c2:
-            mun_esc = criar_filtro_selectbox("Município", op_mun_p1, "mun_esc_sel_a1", "Todas")
-        with c3:
-            loc_esc = criar_filtro_selectbox("Localização", op_loc_p1, "loc_esc_a1", "Todas")
-        with c4:
-            ano_esc = criar_filtro_checkboxes("Ano(s) do Censo", ANOS_ESCOLAS_DIC, "ano_esc_a1", valor_padrao=["2025"])
-        with c5:
-            dep_esc = criar_filtro_checkboxes("Rede", op_dep_p1, "dep_esc_a1")
+            concluir_filtros_a1 = st.form_submit_button(
+                "✔️ Concluir seleção",
+                width="content"
+            )
+
+    if concluir_filtros_a1:
+        st.session_state["ano_esc_a1"] = list(ano_esc)
+        st.session_state["nre_esc_a1"] = list(nre_esc)
+        st.session_state["dep_esc_a1"] = list(dep_esc)
+        st.session_state["loc_esc_a1"] = list(loc_esc)
+        st.rerun()
 
     where_esc = []
     if ano_esc:
         where_esc.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_esc)})")
-    if nre_esc and nre_esc not in ["Todas", "Todos"] and "NO_NRE" in df_escolas_raw.columns:
-        where_esc.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_esc.replace('\'', '\'\'')}'")
+    if nre_esc and "NO_NRE" in df_escolas_raw.columns:
+        nres_s = [n.replace("'", "''") for n in nre_esc]
+        where_esc.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) IN ({', '.join([f'\'{n}\'' for n in nres_s])})")
     if mun_esc and mun_esc != "Todas":
         where_esc.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_esc.replace('\'', '\'\'')}'")
     if dep_esc:
         deps = [int(d.split(' - ')[0]) for d in dep_esc]
         where_esc.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps))})")
-    if loc_esc and loc_esc not in ["Todas", "Todos"]:
-        loc_id = int(loc_esc.split(' - ')[0])
-        where_esc.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
+    if loc_esc:
+        locs = [int(l.split(' - ')[0]) for l in loc_esc]
+        where_esc.append(f"{sql_int_safe('TP_LOCALIZACAO')} IN ({', '.join(map(str, locs))})")
 
     where_clause_escolas = " AND ".join(where_esc)
 
@@ -710,10 +553,10 @@ with aba_escolas:
             def mostrar_tabelas_por_ano_fragmento():
                 st.markdown("##### Localização e Identificação da Escola")
                 
-                cur_nre_t1 = st.session_state.get("nre_t_v1", "Todas")
+                cur_nre_t1 = st.session_state.get("nre_t_v1", [])
                 cur_mun_t1 = st.session_state.get("mun_t_v1", "Todas")
                 cur_dep_t1 = st.session_state.get("dep_t_v1", [])
-                cur_loc_t1 = st.session_state.get("loc_t_v1", "Todas")
+                cur_loc_t1 = st.session_state.get("loc_t_v1", [])
                 cur_cod_t1 = st.session_state.get("cod_t_busca_v1", "Todos")
                 cur_nome_t1 = st.session_state.get("nome_t_busca_v1", "Todas")
 
@@ -722,34 +565,18 @@ with aba_escolas:
                 )
 
                 t_fc1, t_fc2, t_fc3, t_fc4, t_fc5, t_fc6 = st.columns(6)
-                with t_fc1: 
-                    nre_t_sel = criar_filtro_selectbox("Núcleo Regional", op_nre_t1, "nre_t_v1", "Todas")
+                with t_fc1: nre_t_sel = criar_filtro_checkboxes("Núcleo Regional", op_nre_t1, "nre_t_v1")
                 with t_fc2: 
-                    mun_t_sel = criar_filtro_selectbox("Município", op_mun_t1, "mun_t_v1", "Todas")
-                with t_fc3: 
-                    loc_t_sel = criar_filtro_selectbox("Localização", op_loc_t1, "loc_t_v1", "Todas")
-                with t_fc4: 
-                    cod_t_sel = criar_filtro_selectbox("Código INEP", op_cod_t1, "cod_t_busca_v1", "Todos")
+                    mun_val_t1 = cur_mun_t1 if cur_mun_t1 in op_mun_t1 else "Todas"
+                    mun_t_sel = st.selectbox("Município", options=op_mun_t1, index=op_mun_t1.index(mun_val_t1), key="mun_t_v1", help="Selecione um município ou 'Todas' para incluir todos")
+                with t_fc3: dep_t_sel = criar_filtro_checkboxes("Rede", op_dep_t1, "dep_t_v1")
+                with t_fc4: loc_t_sel = criar_filtro_checkboxes("Localização", op_loc_t1, "loc_t_v1")
                 with t_fc5: 
-                    nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas")
+                    cod_val_t1 = cur_cod_t1 if cur_cod_t1 in op_cod_t1 else "Todos"
+                    cod_t_sel = st.selectbox("Código INEP", options=op_cod_t1, index=op_cod_t1.index(cod_val_t1), key="cod_t_busca_v1", help="Selecione um código ou 'Todos' para incluir todos")
                 with t_fc6: 
-                    dep_t_sel = criar_filtro_checkboxes("Rede", op_dep_t1, "dep_t_v1")
-
-                if len(ano_esc) > 1:
-                    opcoes_anos_totais = list(ano_esc)
-                    if (
-                        "ano_totais_visualizacao_a1" not in st.session_state
-                        or st.session_state["ano_totais_visualizacao_a1"] not in opcoes_anos_totais
-                    ):
-                        st.session_state["ano_totais_visualizacao_a1"] = opcoes_anos_totais[0]
-
-                    ano_totais_visualizacao = st.selectbox(
-                        "Visualizar Ano:",
-                        options=opcoes_anos_totais,
-                        key="ano_totais_visualizacao_a1"
-                    )
-                else:
-                    ano_totais_visualizacao = ano_esc[0] if ano_esc else None
+                    nome_val_t1 = cur_nome_t1 if cur_nome_t1 in op_nome_t1 else "Todas"
+                    nome_t_sel = st.selectbox("Nome da Escola", options=op_nome_t1, index=op_nome_t1.index(nome_val_t1), key="nome_t_busca_v1", help="Selecione uma escola ou 'Todas' para incluir todas")
 
                 st.markdown("---")
                 st.markdown("##### Selecione as métricas que deseja exibir nas tabelas abaixo:")
@@ -769,17 +596,32 @@ with aba_escolas:
                 if sel_turno_t: grupos_metricas_a1["Turno / Integral"] = (sel_turno_t, OPCOES_TURNO)
 
                 if grupos_metricas_a1:
+                    v_col1 = st.columns(1)[0]
+                    with v_col1:
+                        if len(ano_esc) > 1:
+                            opcoes_anos_totais = list(ano_esc)
+                            if "ano_totais_visualizacao_a1" not in st.session_state or st.session_state["ano_totais_visualizacao_a1"] not in opcoes_anos_totais:
+                                st.session_state["ano_totais_visualizacao_a1"] = opcoes_anos_totais[0]
+
+                            ano_totais_visualizacao = st.selectbox(
+                                "Visualizar Ano:",
+                                options=opcoes_anos_totais,
+                                key="ano_totais_visualizacao_a1"
+                            )
+                        else:
+                            ano_totais_visualizacao = ano_esc[0] if ano_esc else None
+
                     df_vis_dinamica = df_escolas.copy()
-                    if nre_t_sel and nre_t_sel not in ["Todas", "Todos"] and "NO_NRE" in df_vis_dinamica.columns:
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["NO_NRE"].astype(str).str.strip() == nre_t_sel]
+                    if nre_t_sel and "NO_NRE" in df_vis_dinamica.columns:
+                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["NO_NRE"].astype(str).str.strip().isin(nre_t_sel)]
                     if mun_t_sel and mun_t_sel not in ["Todas", "Todos"]:
                         df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["NO_MUNICIPIO"].astype(str).str.strip() == mun_t_sel]
-                    if loc_t_sel and loc_t_sel not in ["Todas", "Todos"]:
-                        loc_v_id = str(loc_t_sel).split(' - ')[0].strip()
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip() == loc_v_id]
                     if dep_t_sel:
                         deps_v_ids = [str(d.split(' - ')[0]) for d in dep_t_sel]
                         df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["TP_DEPENDENCIA"].astype(str).str.split('.').str[0].str.strip().isin(deps_v_ids)]
+                    if loc_t_sel:
+                        locs_v_ids = [str(l.split(' - ')[0]) for l in loc_t_sel]
+                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip().isin(locs_v_ids)]
                     if cod_t_sel and cod_t_sel != "Todos":
                         cod_limpo_t1 = str(cod_t_sel).split('.')[0].strip()
                         df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["CO_ENTIDADE"].astype(str).str.split('.').str[0].str.strip() == cod_limpo_t1]
@@ -892,10 +734,10 @@ with aba_escolas:
                         key="slider_a2"
                     )
 
-                cur_nre_g1 = st.session_state.get("nre_g1", "Todas")
+                cur_nre_g1 = st.session_state.get("nre_g1", [])
                 cur_mun_g1 = st.session_state.get("mun_g1", "Todas")
                 cur_dep_g1 = st.session_state.get("dep_g1", [])
-                cur_loc_g1 = st.session_state.get("loc_g1", "Todas")
+                cur_loc_g1 = st.session_state.get("loc_g1", [])
                 cur_cod_g1 = st.session_state.get("cod_esc_sel_g1", "Todos")
                 cur_nome_g1 = st.session_state.get("nome_esc_sel_g1", "Todas")
 
@@ -904,18 +746,18 @@ with aba_escolas:
                 )
 
                 g_c1, g_c2, g_c3, g_c4, g_c5, g_c6 = st.columns(6)
-                with g_c1: 
-                    nre_esc_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g1, "nre_g1", "Todas")
+                with g_c1: nre_esc_graf = criar_filtro_checkboxes("Núcleo Regional", op_nre_g1, "nre_g1")
                 with g_c2: 
-                    mun_esc_graf = criar_filtro_selectbox("Município", op_mun_g1, "mun_g1", "Todas")
-                with g_c3: 
-                    loc_esc_graf = criar_filtro_selectbox("Localização", op_loc_g1, "loc_g1", "Todas")
-                with g_c4: 
-                    cod_esc_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g1, "cod_esc_sel_g1", "Todos")
+                    mun_val_g1 = cur_mun_g1 if cur_mun_g1 in op_mun_g1 else "Todas"
+                    mun_esc_graf = st.selectbox("Município", options=op_mun_g1, index=op_mun_g1.index(mun_val_g1), key="mun_g1", help="Selecione um município ou 'Todas' para incluir todos")
+                with g_c3: dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
+                with g_c4: loc_esc_graf = criar_filtro_checkboxes("Localização", op_loc_g1, "loc_g1")
                 with g_c5: 
-                    nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
+                    cod_val_g1 = cur_cod_g1 if cur_cod_g1 in op_cod_g1 else "Todos"
+                    cod_esc_sel_g = st.selectbox("Código INEP", options=op_cod_g1, index=op_cod_g1.index(cod_val_g1), key="cod_esc_sel_g1", help="Selecione um código ou 'Todos' para incluir todos")
                 with g_c6: 
-                    dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
+                    nome_val_g1 = cur_nome_g1 if cur_nome_g1 in op_nome_g1 else "Todas"
+                    nome_esc_sel_g = st.selectbox("Nome da Escola", options=op_nome_g1, index=op_nome_g1.index(nome_val_g1), key="nome_esc_sel_g1", help="Selecione uma escola ou 'Todas' para incluir todas")
 
                 st.markdown("##### Métrica Específica para o Gráfico")
                 
@@ -942,16 +784,16 @@ with aba_escolas:
                             (df_graf_base['ANO_INT'] <= anos_selecionados[1])
                         ]
 
-                        if nre_esc_graf and nre_esc_graf not in ["Todas", "Todos"] and "NO_NRE" in df_graf_base.columns:
-                            df_graf_base = df_graf_base[df_graf_base['NO_NRE'].astype(str).str.strip() == nre_esc_graf]
+                        if nre_esc_graf and "NO_NRE" in df_graf_base.columns:
+                            df_graf_base = df_graf_base[df_graf_base['NO_NRE'].astype(str).str.strip().isin(nre_esc_graf)]
                         if mun_esc_graf and mun_esc_graf not in ["Todas", "Todos"]:
                             df_graf_base = df_graf_base[df_graf_base['NO_MUNICIPIO'].astype(str).str.strip() == mun_esc_graf]
-                        if loc_esc_graf and loc_esc_graf not in ["Todas", "Todos"]:
-                            loc_g_id = str(loc_esc_graf).split(' - ')[0].strip()
-                            df_graf_base = df_graf_base[df_graf_base['TP_LOCALIZACAO'].astype(str).str.split('.').str[0].str.strip() == loc_g_id]
                         if dep_esc_graf:
                             deps_g_ids = [str(d.split(' - ')[0]) for d in dep_esc_graf]
                             df_graf_base = df_graf_base[df_graf_base['TP_DEPENDENCIA'].astype(str).str.split('.').str[0].str.strip().isin(deps_g_ids)]
+                        if loc_esc_graf:
+                            locs_g_ids = [str(l.split(' - ')[0]) for l in loc_esc_graf]
+                            df_graf_base = df_graf_base[df_graf_base['TP_LOCALIZACAO'].astype(str).str.split('.').str[0].str.strip().isin(locs_g_ids)]
                         if cod_esc_sel_g and cod_esc_sel_g != "Todos":
                             cod_limpo_g1 = str(cod_esc_sel_g).split('.')[0].strip()
                             df_graf_base = df_graf_base[df_graf_base['CO_ENTIDADE'].astype(str).str.split('.').str[0].str.strip() == cod_limpo_g1]
@@ -1087,67 +929,78 @@ with aba_escolas:
 with aba_tecnicos:
     with st.expander("📶 **Painel de Filtros - Cursos Técnicos**", expanded=True):
         if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3", width="content"):
-            for chave in ["ano_tec", "nre_tec", "mun_tec_sel_a3", "dep_tec", "loc_tec", "cod_tec_sel_a3", "nome_tec_sel_a3", "nre_t_v2", "mun_t_v2", "dep_t_v2", "loc_t_v2", "cod_t_busca_v2", "nome_t_busca_v2", "sel_qtd_tec", "sel_mat_tec", "sel_area_inst", "sel_nome_curso_inst", "nre_g2", "mun_g2", "dep_g2", "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2", "sel_qtd_tec_graf", "sel_mat_tec_graf", "sel_area_graf", "sel_nome_curso_graf", "ms_tec_confirmado"]:
+            for chave in ["ano_tec", "nre_tec", "mun_tec_sel_a3", "dep_tec", "loc_tec", "cod_tec_sel_a3", "nome_tec_sel_a3", "nome_curso_tec", "nre_t_v2", "mun_t_v2", "dep_t_v2", "loc_t_v2", "cod_t_busca_v2", "nome_t_busca_v2", "sel_qtd_tec", "sel_mat_tec", "sel_area_inst", "sel_nome_curso_inst", "nre_g2", "mun_g2", "dep_g2", "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2", "sel_qtd_tec_graf", "sel_mat_tec_graf", "sel_area_graf", "sel_nome_curso_graf", "ms_tec_confirmado"]:
                 st.session_state.pop(chave, None)
                 for k in list(st.session_state.keys()):
                     if k.startswith(f"cb_{chave}"):
                         st.session_state.pop(k, None)
             st.rerun()
 
-        default_ano_tec = ["2025"]
-        anos_tec_estado_key = "ano_tec__estado"
-        if anos_tec_estado_key not in st.session_state:
-            st.session_state[anos_tec_estado_key] = default_ano_tec
-        ano_tec_val_temp = st.session_state.get(anos_tec_estado_key, default_ano_tec)
+        with st.form("form_filtros_a3", clear_on_submit=False):
+            st.markdown("##### Localização e Identificação da Escola")
+            t1, t2, t3, t4, t5 = st.columns([1, 2, 2, 2, 2])
+            with t1:
+                ano_tec = criar_filtro_checkboxes("Ano(s) do Censo", ANOS_TECNICOS_DIC, "ano_tec", valor_padrao=["2025"])
 
-        if "NU_ANO_CENSO" in df_tecnicos_raw.columns and ano_tec_val_temp:
-            df_tec_ano = df_tecnicos_raw[df_tecnicos_raw["NU_ANO_CENSO"].astype(str).str.split('.').str[0].str.strip().isin(ano_tec_val_temp)]
-        else:
-            df_tec_ano = df_tecnicos_raw
+            if "NU_ANO_CENSO" in df_tecnicos_raw.columns and ano_tec:
+                df_tec_ano = df_tecnicos_raw[df_tecnicos_raw["NU_ANO_CENSO"].astype(str).str.split('.').str[0].str.strip().isin(ano_tec)]
+            else:
+                df_tec_ano = df_tecnicos_raw
 
-        cur_nre_p3 = st.session_state.get("nre_tec", "Todas")
-        cur_mun_p3 = st.session_state.get("mun_tec_sel_a3", "Todas")
-        cur_dep_p3 = st.session_state.get("dep_tec", [])
-        cur_loc_p3 = st.session_state.get("loc_tec", "Todas")
+            cur_nre_p3 = st.session_state.get("nre_tec", [])
+            cur_mun_p3 = st.session_state.get("mun_tec_sel_a3", "Todas")
+            cur_dep_p3 = st.session_state.get("dep_tec", [])
+            cur_loc_p3 = st.session_state.get("loc_tec", [])
 
-        # Verifica se o NRE mudou na aba 2 para resetar o município em tempo real
-        if "last_nre_tec" not in st.session_state:
-            st.session_state["last_nre_tec"] = cur_nre_p3
-        elif st.session_state["last_nre_tec"] != cur_nre_p3:
-            st.session_state["mun_tec_sel_a3"] = "Todas"
-            st.session_state["last_nre_tec"] = cur_nre_p3
-            st.rerun()
+            op_nre_p3, op_mun_p3, op_dep_p3, op_loc_p3, _, _ = get_opcoes_cruzadas_completas(
+                df_tec_ano, nre_sel=cur_nre_p3, mun_sel=cur_mun_p3, dep_sel=cur_dep_p3, loc_sel=cur_loc_p3
+            )
 
-        op_nre_p3, op_mun_p3, op_dep_p3, op_loc_p3, _, _ = get_opcoes_cruzadas_completas(
-            df_tec_ano, nre_sel=cur_nre_p3, mun_sel=cur_mun_p3, dep_sel=cur_dep_p3, loc_sel=cur_loc_p3
-        )
+            with t2:
+                nre_tec = criar_filtro_checkboxes("Núcleo Regional", op_nre_p3, "nre_tec")
+            with t3:
+                mun_val_p3 = cur_mun_p3 if cur_mun_p3 in op_mun_p3 else "Todas"
+                mun_tec = st.selectbox("Município", options=op_mun_p3, index=op_mun_p3.index(mun_val_p3), key="mun_tec_sel_a3", help="Selecione um município ou 'Todas' para incluir todos")
+            with t4:
+                dep_tec = criar_filtro_checkboxes("Rede", op_dep_p3, "dep_tec")
+            with t5:
+                loc_tec = criar_filtro_checkboxes("Localização", op_loc_p3, "loc_tec")
 
-        st.markdown("##### Localização e Identificação da Escola")
-        t1, t2, t3, t4, t5 = st.columns([2, 2, 2, 1.5, 2])
-        with t1:
-            nre_tec = criar_filtro_selectbox("Núcleo Regional", op_nre_p3, "nre_tec", "Todas")
-        with t2:
-            mun_tec = criar_filtro_selectbox("Município", op_mun_p3, "mun_tec_sel_a3", "Todas")
-        with t3:
-            loc_tec = criar_filtro_selectbox("Localização", op_loc_p3, "loc_tec", "Todas")
-        with t4:
-            ano_tec = criar_filtro_checkboxes("Ano(s) do Censo", ANOS_TECNICOS_DIC, "ano_tec", valor_padrao=["2025"])
-        with t5:
-            dep_tec = criar_filtro_checkboxes("Rede", op_dep_p3, "dep_tec")
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            op_curso_tec = sorted(df_tec_ano["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_CURSO_EDUC_PROFISSIONAL" in df_tec_ano.columns else []
+            nome_curso_tec = criar_filtro_checkboxes("Nome do Curso", {op: op for op in op_curso_tec}, "nome_curso_tec")
+
+            concluir_filtros_a3 = st.form_submit_button(
+                "✔️ Concluir seleção",
+                width="content"
+            )
+
+    if concluir_filtros_a3:
+        st.session_state["ano_tec"] = list(ano_tec)
+        st.session_state["nre_tec"] = list(nre_tec)
+        st.session_state["dep_tec"] = list(dep_tec)
+        st.session_state["loc_tec"] = list(loc_tec)
+        st.session_state["nome_curso_tec"] = list(nome_curso_tec)
+        st.rerun()
 
     where_tec = []
     if ano_tec:
         where_tec.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_tec)})")
-    if nre_tec and nre_tec not in ["Todas", "Todos"] and "NO_NRE" in df_tecnicos_raw.columns:
-        where_tec.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_tec.replace('\'', '\'\'')}'")
+    if nre_tec and "NO_NRE" in df_tecnicos_raw.columns:
+        nres_t_s = [n.replace("'", "''") for n in nre_tec]
+        where_tec.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) IN ({', '.join([f'\'{n}\'' for n in nres_t_s])})")
     if mun_tec and mun_tec not in ["Todas", "Todos"]:
         where_tec.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_tec.replace('\'', '\'\'')}'")
     if dep_tec:
         deps_t = [int(d.split(' - ')[0]) for d in dep_tec]
         where_tec.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps_t))})")
-    if loc_tec and loc_tec not in ["Todas", "Todos"]:
-        loc_id_t = int(loc_tec.split(' - ')[0])
-        where_tec.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id_t}")
+    if loc_tec:
+        locs_t = [int(l.split(' - ')[0]) for l in loc_tec]
+        where_tec.append(f"{sql_int_safe('TP_LOCALIZACAO')} IN ({', '.join(map(str, locs_t))})")
+    if nome_curso_tec and "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos_raw.columns:
+        cursos_t = [c.replace('\'', '\'\'') for c in nome_curso_tec]
+        where_tec.append(f"TRIM(CAST(NO_CURSO_EDUC_PROFISSIONAL AS VARCHAR)) IN ({', '.join([f'\'{c}\'' for c in cursos_t])})")
 
     sql_tecnicos = f"SELECT * FROM df_tecnicos_raw" + (" WHERE " + " AND ".join(where_tec) if where_tec else "")
 
@@ -1173,10 +1026,10 @@ with aba_tecnicos:
             def mostrar_tabelas_tecnicos_por_ano_fragmento():
                 st.markdown("##### Localização e Identificação da Escola")
                 
-                cur_nre_tt = st.session_state.get("nre_t_v2", "Todas")
+                cur_nre_tt = st.session_state.get("nre_t_v2", [])
                 cur_mun_tt = st.session_state.get("mun_t_v2", "Todas")
                 cur_dep_tt = st.session_state.get("dep_t_v2", [])
-                cur_loc_tt = st.session_state.get("loc_t_v2", "Todas")
+                cur_loc_tt = st.session_state.get("loc_t_v2", [])
                 cur_cod_tt = st.session_state.get("cod_t_busca_v2", "Todos")
                 cur_nome_tt = st.session_state.get("nome_t_busca_v2", "Todas")
 
@@ -1185,46 +1038,24 @@ with aba_tecnicos:
                 )
 
                 t_tc1, t_tc2, t_tc3, t_tc4, t_tc5, t_tc6 = st.columns(6)
-                with t_tc1: 
-                    nre_t_sel_tec = criar_filtro_selectbox("Núcleo Regional", op_nre_tt, "nre_t_v2", "Todas")
+                with t_tc1: nre_t_sel_tec = criar_filtro_checkboxes("Núcleo Regional", op_nre_tt, "nre_t_v2")
                 with t_tc2: 
-                    mun_t_sel_tec = criar_filtro_selectbox("Município", op_mun_tt, "mun_t_v2", "Todas")
-                with t_tc3: 
-                    loc_t_sel_tec = criar_filtro_selectbox("Localização", op_loc_tt, "loc_t_v2", "Todas")
-                with t_tc4: 
-                    cod_t_sel_tec = criar_filtro_selectbox("Código INEP", op_cod_tt, "cod_t_busca_v2", "Todos")
+                    mun_val_tt = cur_mun_tt if cur_mun_tt in op_mun_tt else "Todas"
+                    mun_t_sel_tec = st.selectbox("Município", options=op_mun_tt, index=op_mun_tt.index(mun_val_tt), key="mun_t_v2", help="Selecione um município ou 'Todas' para incluir todos")
+                with t_tc3: dep_t_sel_tec = criar_filtro_checkboxes("Rede", op_dep_tt, "dep_t_v2")
+                with t_tc4: loc_t_sel_tec = criar_filtro_checkboxes("Localização", op_loc_tt, "loc_t_v2")
                 with t_tc5: 
-                    nome_t_sel_tec = criar_filtro_selectbox("Nome da Escola", op_nome_tt, "nome_t_busca_v2", "Todas")
+                    cod_val_tt = cur_cod_tt if cur_cod_tt in op_cod_tt else "Todos"
+                    cod_t_sel_tec = st.selectbox("Código INEP", options=op_cod_tt, index=op_cod_tt.index(cod_val_tt), key="cod_t_busca_v2", help="Selecione um código ou 'Todos' para incluir todos")
                 with t_tc6: 
-                    dep_t_sel_tec = criar_filtro_checkboxes("Rede", op_dep_tt, "dep_t_v2")
-
-                if len(ano_tec) > 1:
-                    opcoes_anos_tec_totais = list(ano_tec)
-                    if (
-                        "ano_totais_visualizacao_tec" not in st.session_state
-                        or st.session_state["ano_totais_visualizacao_tec"] not in opcoes_anos_tec_totais
-                    ):
-                        st.session_state["ano_totais_visualizacao_tec"] = opcoes_anos_tec_totais[0]
-
-                    ano_totais_tec_vis = st.selectbox(
-                        "Visualizar Ano:",
-                        options=opcoes_anos_tec_totais,
-                        key="ano_totais_visualizacao_tec"
-                    )
-                else:
-                    ano_totais_tec_vis = ano_tec[0] if ano_tec else None
+                    nome_val_tt = cur_nome_tt if cur_nome_tt in op_nome_tt else "Todas"
+                    nome_t_sel_tec = st.selectbox("Nome da Escola", options=op_nome_tt, index=op_nome_tt.index(nome_val_tt), key="nome_t_busca_v2", help="Selecione uma escola ou 'Todas' para incluir todas")
 
                 st.markdown("---")
                 st.markdown("##### Descrição do Curso")
                 d_col1, d_col2 = st.columns(2)
-                
-                op_areas_tec = ["Todas"] + sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
-                op_nomes_cursos_tec = ["Todas"] + sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
-
-                with d_col1: 
-                    sel_area_inst = criar_filtro_selectbox("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", op_areas_tec, "sel_area_inst", "Todas")
-                with d_col2: 
-                    sel_nome_curso_inst = criar_filtro_selectbox("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", op_nomes_cursos_tec, "sel_nome_curso_inst", "Todas")
+                with d_col1: sel_area_inst = criar_filtro_checkboxes("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", {op: op for op in sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique())} if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else {}, "sel_area_inst")
+                with d_col2: sel_nome_curso_inst = criar_filtro_checkboxes("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", {op: op for op in sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique())} if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else {}, "sel_nome_curso_inst")
 
                 st.markdown("---")
                 st.markdown("##### Selecione as métricas que deseja exibir nas tabelas abaixo:")
@@ -1234,30 +1065,40 @@ with aba_tecnicos:
                 with t_col2: sel_mat_tec = criar_filtro_checkboxes("Quantidade de Matrículas", OPCOES_CURSOS_MAT, "sel_mat_tec")
 
                 tem_metricas_gerais = bool(sel_qtd_tec or sel_mat_tec)
-                tem_dimensoes_especificas = bool(sel_area_inst != "Todas" or sel_nome_curso_inst != "Todas")
+                tem_dimensoes_especificas = bool(sel_area_inst or sel_nome_curso_inst)
 
                 if tem_metricas_gerais or tem_dimensoes_especificas:
+                    v_col_t = st.columns(1)[0]
+                    with v_col_t:
+                        if len(ano_tec) > 1:
+                            opcoes_anos_tec_totais = list(ano_tec)
+                            if "ano_totais_visualizacao_tec" not in st.session_state or st.session_state["ano_totais_visualizacao_tec"] not in opcoes_anos_tec_totais:
+                                st.session_state["ano_totais_visualizacao_tec"] = opcoes_anos_tec_totais[0]
+
+                            ano_totais_tec_vis = st.selectbox(
+                                "Visualizar Ano:",
+                                options=opcoes_anos_tec_totais,
+                                key="ano_totais_visualizacao_tec"
+                            )
+                        else:
+                            ano_totais_tec_vis = ano_tec[0] if ano_tec else None
+
                     df_vis_tec_dinamica = df_tecnicos.copy()
-                    if nre_t_sel_tec and nre_t_sel_tec not in ["Todas", "Todos"] and "NO_NRE" in df_vis_tec_dinamica.columns:
-                        df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_NRE"].astype(str).str.strip() == nre_t_sel_tec]
+                    if nre_t_sel_tec and "NO_NRE" in df_vis_tec_dinamica.columns:
+                        df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_NRE"].astype(str).str.strip().isin(nre_t_sel_tec)]
                     if mun_t_sel_tec and mun_t_sel_tec not in ["Todas", "Todos"]:
                         df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_MUNICIPIO"].astype(str).str.strip() == mun_t_sel_tec]
-                    if loc_t_sel_tec and loc_t_sel_tec not in ["Todas", "Todos"]:
-                        loc_vt_id = str(loc_t_sel_tec).split(' - ')[0].strip()
-                        df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip() == loc_vt_id]
                     if dep_t_sel_tec:
                         deps_vt_ids = [str(d.split(' - ')[0]) for d in dep_t_sel_tec]
                         df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["TP_DEPENDENCIA"].astype(str).str.split('.').str[0].str.strip().isin(deps_vt_ids)]
+                    if loc_t_sel_tec:
+                        locs_vt_ids = [str(l.split(' - ')[0]) for l in loc_t_sel_tec]
+                        df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip().isin(locs_vt_ids)]
                     if cod_t_sel_tec and cod_t_sel_tec != "Todos":
                         cod_limpo_t2 = str(cod_t_sel_tec).split('.')[0].strip()
                         df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["CO_ENTIDADE"].astype(str).str.split('.').str[0].str.strip() == cod_limpo_t2]
                     if nome_t_sel_tec and nome_t_sel_tec not in ["Todas", "Todos"]:
                         df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_ENTIDADE"].astype(str).str.strip() == nome_t_sel_tec]
-
-                    if sel_area_inst != "Todas" and "NO_AREA_CURSO_PROFISSIONAL" in df_vis_tec_dinamica.columns:
-                        df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_AREA_CURSO_PROFISSIONAL"].astype(str).str.strip() == sel_area_inst]
-                    if sel_nome_curso_inst != "Todas" and "NO_CURSO_EDUC_PROFISSIONAL" in df_vis_tec_dinamica.columns:
-                        df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_CURSO_EDUC_PROFISSIONAL"].astype(str).str.strip() == sel_nome_curso_inst]
 
                     anos_vt_serie = df_vis_tec_dinamica["NU_ANO_CENSO"].astype(str).str.split(".").str[0].str.strip() if not df_vis_tec_dinamica.empty else pd.Series()
                     df_ano_calc_tec = df_vis_tec_dinamica[anos_vt_serie == str(ano_totais_tec_vis)] if ano_totais_tec_vis else df_vis_tec_dinamica
@@ -1330,10 +1171,10 @@ with aba_tecnicos:
                                         )
 
                     dimensoes_para_exibir = []
-                    if sel_area_inst != "Todas":
-                        dimensoes_para_exibir.append(("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", "NO_AREA_CURSO_PROFISSIONAL", [sel_area_inst]))
-                    if sel_nome_curso_inst != "Todas":
-                        dimensoes_para_exibir.append(("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", "NO_CURSO_EDUC_PROFISSIONAL", [sel_nome_curso_inst]))
+                    if sel_area_inst:
+                        dimensoes_para_exibir.append(("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", "NO_AREA_CURSO_PROFISSIONAL", sel_area_inst))
+                    if sel_nome_curso_inst:
+                        dimensoes_para_exibir.append(("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", "NO_CURSO_EDUC_PROFISSIONAL", sel_nome_curso_inst))
 
                     if dimensoes_para_exibir:
                         st.markdown("---")
@@ -1422,10 +1263,10 @@ with aba_tecnicos:
                         key="slider_tec"
                     )
 
-                cur_nre_g2 = st.session_state.get("nre_g2", "Todas")
+                cur_nre_g2 = st.session_state.get("nre_g2", [])
                 cur_mun_g2 = st.session_state.get("mun_g2", "Todas")
                 cur_dep_g2 = st.session_state.get("dep_g2", [])
-                cur_loc_g2 = st.session_state.get("loc_g2", "Todas")
+                cur_loc_g2 = st.session_state.get("loc_g2", [])
                 cur_cod_g2 = st.session_state.get("cod_tec_busca_g2", "Todos")
                 cur_nome_g2 = st.session_state.get("nome_tec_busca_g2", "Todas")
 
@@ -1434,29 +1275,23 @@ with aba_tecnicos:
                 )
 
                 g_t1, g_t2, g_t3, g_t4, g_t5, g_t6 = st.columns(6)
-                with g_t1: 
-                    nre_tec_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g2, "nre_g2", "Todas")
+                with g_t1: nre_tec_graf = criar_filtro_checkboxes("Núcleo Regional", op_nre_g2, "nre_g2")
                 with g_t2: 
-                    mun_tec_graf = criar_filtro_selectbox("Município", op_mun_g2, "mun_g2", "Todas")
-                with g_t3: 
-                    loc_tec_graf = criar_filtro_selectbox("Localização", op_loc_g2, "loc_g2", "Todas")
-                with g_t4: 
-                    cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
+                    mun_val_g2 = cur_mun_g2 if cur_mun_g2 in op_mun_g2 else "Todas"
+                    mun_tec_graf = st.selectbox("Município", options=op_mun_g2, index=op_mun_g2.index(mun_val_g2), key="mun_g2", help="Selecione um município ou 'Todas' para incluir todos")
+                with g_t3: dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
+                with g_t4: loc_tec_graf = criar_filtro_checkboxes("Localização", op_loc_g2, "loc_g2")
                 with g_t5: 
-                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas")
+                    cod_val_g2 = cur_cod_g2 if cur_cod_g2 in op_cod_g2 else "Todos"
+                    cod_tec_sel_g = st.selectbox("Código INEP", options=op_cod_g2, index=op_cod_g2.index(cod_val_g2), key="cod_tec_busca_g2", help="Selecione um código ou 'Todos' para incluir todos")
                 with g_t6: 
-                    dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
+                    nome_val_g2 = cur_nome_g2 if cur_nome_g2 in op_nome_g2 else "Todas"
+                    nome_tec_sel_g = st.selectbox("Nome da Escola", options=op_nome_g2, index=op_nome_g2.index(nome_val_g2), key="nome_tec_busca_g2", help="Selecione uma escola ou 'Todas' para incluir todas")
 
                 st.markdown("##### Descrição do Curso")
                 gd1, gd2 = st.columns(2)
-                
-                op_areas_graf = ["Todas"] + sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
-                op_nomes_graf = ["Todas"] + sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
-
-                with gd1: 
-                    sel_area_graf = criar_filtro_selectbox("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", op_areas_graf, "sel_area_graf", "Todas")
-                with gd2: 
-                    sel_nome_curso_graf = criar_filtro_selectbox("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", op_nomes_graf, "sel_nome_curso_graf", "Todas")
+                with gd1: sel_area_graf = criar_filtro_checkboxes("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", {op: op for op in sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique())} if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else {}, "sel_area_graf")
+                with gd2: sel_nome_curso_graf = criar_filtro_checkboxes("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", {op: op for op in sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique())} if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else {}, "sel_nome_curso_graf")
 
                 st.markdown("##### Métrica Específica para o Gráfico")
                 
@@ -1477,26 +1312,26 @@ with aba_tecnicos:
                             (df_graf_tec_base['ANO_INT'] <= anos_tec_sel[1])
                         ]
 
-                        if nre_tec_graf and nre_tec_graf not in ["Todas", "Todos"] and "NO_NRE" in df_graf_tec_base.columns:
-                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_NRE'].astype(str).str.strip() == nre_tec_graf]
+                        if nre_tec_graf and "NO_NRE" in df_graf_tec_base.columns:
+                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_NRE'].astype(str).str.strip().isin(nre_tec_graf)]
                         if mun_tec_graf and mun_tec_graf not in ["Todas", "Todos"]:
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_MUNICIPIO'].astype(str).str.strip() == mun_tec_graf]
-                        if loc_tec_graf and loc_tec_graf not in ["Todas", "Todos"]:
-                            loc_tg_id = str(loc_tec_graf).split(' - ')[0].strip()
-                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['TP_LOCALIZACAO'].astype(str).str.split('.').str[0].str.strip() == loc_tg_id]
                         if dep_tec_graf:
                             deps_tg_ids = [str(d.split(' - ')[0]) for d in dep_tec_graf]
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['TP_DEPENDENCIA'].astype(str).str.split('.').str[0].str.strip().isin(deps_tg_ids)]
+                        if loc_tec_graf:
+                            locs_tg_ids = [str(l.split(' - ')[0]) for l in loc_tec_graf]
+                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['TP_LOCALIZACAO'].astype(str).str.split('.').str[0].str.strip().isin(locs_tg_ids)]
                         if cod_tec_sel_g and cod_tec_sel_g != "Todos":
                             cod_limpo_g2 = str(cod_tec_sel_g).split('.')[0].strip()
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['CO_ENTIDADE'].astype(str).str.split('.').str[0].str.strip() == cod_limpo_g2]
                         if nome_tec_sel_g and nome_tec_sel_g not in ["Todas", "Todos"]:
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_ENTIDADE'].astype(str).str.strip() == nome_tec_sel_g]
 
-                        if sel_area_graf != "Todas" and "NO_AREA_CURSO_PROFISSIONAL" in df_graf_tec_base.columns:
-                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_AREA_CURSO_PROFISSIONAL'].astype(str).str.strip() == sel_area_graf]
-                        if sel_nome_curso_graf != "Todas" and "NO_CURSO_EDUC_PROFISSIONAL" in df_graf_tec_base.columns:
-                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_CURSO_EDUC_PROFISSIONAL'].astype(str).str.strip() == sel_nome_curso_graf]
+                        if sel_area_graf and "NO_AREA_CURSO_PROFISSIONAL" in df_graf_tec_base.columns:
+                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_AREA_CURSO_PROFISSIONAL'].astype(str).str.strip().isin(sel_area_graf)]
+                        if sel_nome_curso_graf and "NO_CURSO_EDUC_PROFISSIONAL" in df_graf_tec_base.columns:
+                            df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_CURSO_EDUC_PROFISSIONAL'].astype(str).str.strip().isin(sel_nome_curso_graf)]
 
                     for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_tec_graf.items():
                         colunas_grupo = extrair_chaves_por_rotulos(selecionados_grupo, opcoes_grupo)
@@ -1617,59 +1452,3 @@ with aba_tecnicos:
 
     except Exception as e:
         st.error(f"Erro: {e}")
-
-# =============================================================================
-# ABA 3 - OBSERVAÇÕES E LIMITAÇÕES
-# =============================================================================
-
-with aba_obs:
-    st.markdown("## 🔎 Observações e Limitações Metodológicas")
-    st.caption("Orientações para uso e interpretação dos dados extraídos do Censo Escolar (INEP)")
-    
-    st.markdown("---")
-    
-    with st.container(border=True):
-        st.markdown("### 1. Ausência de Cruzamento Multidimensional Agregado")
-        st.write(
-            "Os microdados da **Super Tabela de Escolas** disponibilizados pelo INEP refletem agregações por instituição. "
-            "Portanto, **não é possível realizar cruzamentos multidimensionais diretos** entre variáveis categóricas distintas."
-        )
-        st.info(
-            "**Exemplo Prático:** É possível visualizar a quantidade total de alunos pretos/pardos na escola e a quantidade total "
-            "de alunos no turno noturno. No entanto, **não é possível identificar quantos alunos pretos/pardos estudam especificamente no turno noturno**, "
-            "pois tais variáveis são contabilizadas de forma independente na declaração da escola."
-        )
-
-    with st.container(border=True):
-        st.markdown("### 2. Granularidade do Turno das Turmas")
-        st.write(
-            "A base agregada disponibiliza o turno dividido de forma macro:"
-        )
-        st.markdown("""
-        * **Diurno (`QT_MAT_BAS_D`):** Agrupa os turnos matutino, vespertino e intermediário.
-        * **Noturno (`QT_MAT_BAS_N`):** Contabiliza o atendimento noturno.
-        """)
-       
-
-    with st.container(border=True):
-        st.markdown("### 3. Histórico e Série Temporal")
-        st.markdown("""
-        * **Super Tabela Escolas (2007–2025):** Série temporal longa para análise de infraestrutura, turmas e matrículas gerais.
-        * **Cursos Técnicos (2023–2025):** A estrutura de acompanhamento dos Cursos Técnicos e do Itinerário de Formação Técnica (IFTP) passou por reformulações metodológicas no Censo Escolar, possuindo histórico contínuo padronizado a partir do ciclo de 2023.
-        """)
-
-    with st.container(border=True):
-        st.markdown("### 4. Contabilização de Turmas nas Métricas")
-        st.write(
-            "Algumas variáveis de matrículas (como recortes por raça/cor, idade e sexo) representam atributos dos estudantes "
-            "e não possuem uma coluna direta de contagem de turmas vinculada na tabela do INEP. Nessas métricas, a coluna 'Turmas' "
-            "ficará exibida como `-` por não existir turmas para essas categorias."
-        )
-
-    with st.container(border=True):
-        st.markdown("### 5. Contabilização de Outras Métricas")
-        st.write(
-            "Esta plataforma exibe resultados consolidados e gráficos sobre matrículas, turmas e cursos. "
-            "Para a realização de análises avançadas ou cálculo de outros quantitativos específicos, "
-            "é disponibilizado ao final de cada aba um arquivo em formato Excel (.xlsx) para download completo dos dados filtrados."
-        )
