@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import duckdb
 import os
-import urllib.request
+import requests
 import time
 import plotly.express as px
 import io
@@ -551,11 +551,36 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
+# DOWNLOAD ROBUSTO DO GOOGLE DRIVE (Contorna aviso de ficheiro grande)
+# =============================================================================
+
+def download_google_drive(file_id, destination):
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params={'id': file_id}, stream=True)
+    
+    # Detetar token de confirmação para ficheiros grandes
+    token = None
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            token = value
+            break
+            
+    if token:
+        params = {'id': file_id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+        
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(32768):
+            if chunk:
+                f.write(chunk)
+
+# =============================================================================
 # CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Google Drive na Nuvem)
 # =============================================================================
 
-URL_ESCOLAS = "https://drive.google.com/uc?export=download&id=1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
-URL_TECNICOS = "https://drive.google.com/uc?export=download&id=12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
+ID_ESCOLAS = "1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
+ID_TECNICOS = "12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 
 if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
     # Caminhos no seu Computador (Local)
@@ -566,16 +591,15 @@ else:
     CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-    # Função que descarrega automaticamente os ficheiros do Google Drive se não existirem
     @st.cache_resource
     def garantir_ficheiros_nuvem():
         if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
             with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
-                urllib.request.urlretrieve(URL_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
+                download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
                 
         if not os.path.exists(CAMINHO_TECNICOS):
             with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
-                urllib.request.urlretrieve(URL_TECNICOS, CAMINHO_TECNICOS)
+                download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
 
     garantir_ficheiros_nuvem()
 
