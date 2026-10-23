@@ -551,11 +551,11 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Nuvem)
+# CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Google Drive na Nuvem)
 # =============================================================================
 
-URL_ESCOLAS = "https://github.com/leandrojjsiqueira/painel-censo-escolar/releases/download/v1.0.0/v1_super_tabela_escolas.parquet"
-URL_TECNICOS = "https://github.com/leandrojjsiqueira/painel-censo-escolar/releases/download/v1.0.0/v2_super_tabela_cursos_tecnicos.parquet"
+URL_ESCOLAS = "https://drive.google.com/uc?export=download&id=1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
+URL_TECNICOS = "https://drive.google.com/uc?export=download&id=12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 
 if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
     # Caminhos no seu Computador (Local)
@@ -566,15 +566,15 @@ else:
     CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-    # Função que descarrega automaticamente os ficheiros se não existirem no servidor
+    # Função que descarrega automaticamente os ficheiros do Google Drive se não existirem
     @st.cache_resource
     def garantir_ficheiros_nuvem():
         if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-            with st.spinner("📥 A descarregar a Super Tabela de Escolas para a nuvem..."):
+            with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
                 urllib.request.urlretrieve(URL_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
                 
         if not os.path.exists(CAMINHO_TECNICOS):
-            with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos para a nuvem..."):
+            with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
                 urllib.request.urlretrieve(URL_TECNICOS, CAMINHO_TECNICOS)
 
     garantir_ficheiros_nuvem()
