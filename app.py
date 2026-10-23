@@ -598,17 +598,16 @@ DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
 DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
 
 try:
-    # Na nuvem, criamos um dataframe leve apenas com os anos/cabeçalhos ou o técnico essencial
-    # Para o df_escolas_raw, puxamos apenas uma amostra/resumo leve para alimentar os seletores iniciais sem estourar a RAM:
     con_init = duckdb.connect()
     df_escolas_raw = con_init.execute(f"SELECT NU_ANO_CENSO, NO_NRE, NO_MUNICIPIO, TP_DEPENDENCIA, TP_LOCALIZACAO, CO_ENTIDADE, NO_ENTIDADE FROM read_parquet('{CAMINHO_ESCOLAS_PARQUET}')").df()
     df_escolas_raw.columns = df_escolas_raw.columns.str.strip().str.upper()
     con_init.close()
 
     df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
+
 except Exception as e:
-    st.error("Erro ao carregar os dados:")
-    st.exception(e)
+    st.error("❌ Ocorreu um erro crítico ao carregar os dados na nuvem:")
+    st.code(traceback.format_exc())
     st.stop()
 
 
