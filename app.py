@@ -549,20 +549,46 @@ def converter_df_para_excel(df):
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_tratado.to_excel(writer, index=False, sheet_name='Relatorio')
     return output.getvalue()
+
+import os
+import urllib.request
+
 # =============================================================================
-# CAMINHOS E CARREGAMENTO (Otimizado para poupar RAM na Nuvem)
+# CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Nuvem)
 # =============================================================================
+
+# Substitua pelos links diretos dos ficheiros (GitHub Releases ou Google Drive público)
+URL_ESCOLAS = "COLE_AQUI_O_LINK_DIRETO_DO_FICHEIRO_DE_ESCOLAS"
+URL_TECNICOS = "COLE_AQUI_O_LINK_DIRETO_DO_FICHEIRO_DE_TECNICOS"
 
 if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
     # Caminhos no seu Computador (Local)
     CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
 else:
-    # Caminhos na Nuvem (Streamlit Cloud / GitHub)
+    # Caminhos na Nuvem (Streamlit Cloud)
     CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-# Função leve para carregar a tabela de técnicos
+    # Função que descarrega automaticamente os ficheiros se não existirem no servidor
+    @st.cache_resource
+    def garantir_ficheiros_nuvem():
+        if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+            with st.spinner("📥 A descarregar a Super Tabela de Escolas para a nuvem (primeira execução)..."):
+                urllib.request.urlretrieve(URL_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
+                
+        if not os.path.exists(CAMINHO_TECNICOS):
+            with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos para a nuvem (primeira execução)..."):
+                urllib.request.urlretrieve(URL_TECNICOS, CAMINHO_TECNICOS)
+
+    garantir_ficheiros_nuvem()
+
+@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
+def carregar_tabela_escolas(caminho_parquet, data_modificacao):
+    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
+    df.columns = df.columns.str.strip().str.upper()
+    return df
+
 @st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
 def carregar_tabela_tecnicos(caminho, data_modificacao):
     con = duckdb.connect()
@@ -576,7 +602,6 @@ def carregar_tabela_tecnicos(caminho, data_modificacao):
         con.close()
     return df
 
-# Consulta otimizada por DuckDB para substituir o df_escolas_raw pesado
 @st.cache_data(show_spinner=False)
 def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
     con = duckdb.connect()
@@ -584,9 +609,7 @@ def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
         sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
         if where_clause:
             sql += f" WHERE {where_clause}"
-        df = con.execute(sql).df()
-        df.columns = df.columns.str.strip().str.upper()
-        return df
+        return con.execute(sql).df()
     finally:
         con.close()
 
@@ -598,18 +621,12 @@ DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
 DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
 
 try:
-    con_init = duckdb.connect()
-    df_escolas_raw = con_init.execute(f"SELECT NU_ANO_CENSO, NO_NRE, NO_MUNICIPIO, TP_DEPENDENCIA, TP_LOCALIZACAO, CO_ENTIDADE, NO_ENTIDADE FROM read_parquet('{CAMINHO_ESCOLAS_PARQUET}')").df()
-    df_escolas_raw.columns = df_escolas_raw.columns.str.strip().str.upper()
-    con_init.close()
-
+    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
     df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
-
 except Exception as e:
-    st.error("❌ Ocorreu um erro crítico ao carregar os dados na nuvem:")
-    st.code(traceback.format_exc())
+    st.error("Erro ao carregar os dados:")
+    st.exception(e)
     st.stop()
-
 
 # =============================================================================
 # TÍTULO E ABAS GLOBAIS
