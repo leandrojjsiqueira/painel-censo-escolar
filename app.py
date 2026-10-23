@@ -556,55 +556,61 @@ try:
         return output.getvalue()
 
     # =============================================================================
-    # CAMINHOS E CARREGAMENTO (Adaptado Local e Nuvem)
-    # =============================================================================
+# CAMINHOS E CARREGAMENTO (Compatível com Local e Nuvem)
+# =============================================================================
 
-    if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
-        CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
-        CAMINHO_TECNICOS = r"C:\Ferramenta_Censo\v2_super_tabela_cursos_tecnicos.parquet"
-    else:
-        CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
-        CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
+if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
+    CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
+    CAMINHO_TECNICOS = r"C:\Ferramenta_Censo\v2_super_tabela_cursos_tecnicos.parquet"
+else:
+    CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
+    CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-    @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
-    def carregar_tabela_escolas(caminho_parquet, data_modificacao):
-        df = pd.read_parquet(caminho_parquet, engine="pyarrow")
+@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
+def carregar_tabela_escolas(caminho_parquet, data_modificacao):
+    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
+    df.columns = df.columns.str.strip().str.upper()
+    return df
+
+@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
+def carregar_tabela_tecnicos(caminho, data_modificacao):
+    con = duckdb.connect()
+    try:
+        if caminho.endswith('.parquet'):
+            df = con.execute(f"SELECT * FROM read_parquet('{caminho}')").df()
+        else:
+            df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
         df.columns = df.columns.str.strip().str.upper()
-        return df
+    finally:
+        con.close()
+    return df
 
-    @st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
-    def carregar_tabela_tecnicos(caminho, data_modificacao):
-        con = duckdb.connect()
-        try:
-            if caminho.endswith('.parquet'):
-                df = con.execute(f"SELECT * FROM read_parquet('{caminho}')").df()
-            else:
-                df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
-            df.columns = df.columns.str.strip().str.upper()
-        finally:
-            con.close()
-        return df
+@st.cache_data(show_spinner=False)
+def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
+    con = duckdb.connect()
+    try:
+        sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        return con.execute(sql).df()
+    finally:
+        con.close()
 
-    @st.cache_data(show_spinner=False)
-    def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
-        con = duckdb.connect()
-        try:
-            sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
-            if where_clause:
-                sql += f" WHERE {where_clause}"
-            return con.execute(sql).df()
-        finally:
-            con.close()
+if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+    st.error(f"❌ ERRO: O ficheiro de escolas não foi encontrado na nuvem: {CAMINHO_ESCOLAS_PARQUET}")
+    st.info("💡 Certifique-se de que o ficheiro 'v1_super_tabela_escolas.parquet' foi enviado para a raiz do seu repositório no GitHub.")
+    st.stop()
 
-    if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
-        st.error(f"ERRO: Ficheiros não encontrados. Escolas: {CAMINHO_ESCOLAS_PARQUET} | Técnicos: {CAMINHO_TECNICOS}")
-        st.stop()
+if not os.path.exists(CAMINHO_TECNICOS):
+    st.error(f"❌ ERRO: O ficheiro de cursos técnicos não foi encontrado na nuvem: {CAMINHO_TECNICOS}")
+    st.info("💡 Certifique-se de que o ficheiro 'v2_super_tabela_cursos_tecnicos.parquet' foi enviado para a raiz do seu repositório no GitHub.")
+    st.stop()
 
-    DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
-    DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
+DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
+DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
 
-    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
-    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
+df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
+df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
 
     # =============================================================================
     # TÍTULO E ABAS GLOBAIS
@@ -1669,8 +1675,3 @@ try:
                 "Para a realização de análises avançadas ou cálculo de outros quantitativos específicos, "
                 "é disponibilizado ao final de cada aba um arquivo em formato Excel (.xlsx) para download completo dos dados filtrados."
             )
-
-except Exception as e:
-    st.error("❌ Ocorreu um erro crítico na execução do painel:")
-    st.code(traceback.format_exc())
-    st.stop()
