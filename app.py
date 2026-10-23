@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import duckdb
 import os
+import urllib.request
 import time
 import plotly.express as px
 import io
@@ -302,7 +303,6 @@ def criar_filtro_selectbox(titulo, opcoes, key, valor_padrao="Todas"):
         help=f"Selecione uma opção ou '{valor_padrao}' para incluir todos"
     )
 
-
 def get_opcoes_cruzadas_completas(
     df_in,
     nre_sel=None,
@@ -550,16 +550,12 @@ def converter_df_para_excel(df):
         df_tratado.to_excel(writer, index=False, sheet_name='Relatorio')
     return output.getvalue()
 
-import os
-import urllib.request
-
 # =============================================================================
 # CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Nuvem)
 # =============================================================================
 
-# Substitua pelos links diretos dos ficheiros (GitHub Releases ou Google Drive público)
-URL_ESCOLAS = "COLE_AQUI_O_LINK_DIRETO_DO_FICHEIRO_DE_ESCOLAS"
-URL_TECNICOS = "COLE_AQUI_O_LINK_DIRETO_DO_FICHEIRO_DE_TECNICOS"
+URL_ESCOLAS = "https://github.com/leandrojjsiqueira/painel-censo-escolar/releases/download/v1.0.0/v1_super_tabela_escolas.parquet"
+URL_TECNICOS = "https://github.com/leandrojjsiqueira/painel-censo-escolar/releases/download/v1.0.0/v2_super_tabela_cursos_tecnicos.parquet"
 
 if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
     # Caminhos no seu Computador (Local)
@@ -574,11 +570,11 @@ else:
     @st.cache_resource
     def garantir_ficheiros_nuvem():
         if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-            with st.spinner("📥 A descarregar a Super Tabela de Escolas para a nuvem (primeira execução)..."):
+            with st.spinner("📥 A descarregar a Super Tabela de Escolas para a nuvem..."):
                 urllib.request.urlretrieve(URL_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
                 
         if not os.path.exists(CAMINHO_TECNICOS):
-            with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos para a nuvem (primeira execução)..."):
+            with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos para a nuvem..."):
                 urllib.request.urlretrieve(URL_TECNICOS, CAMINHO_TECNICOS)
 
     garantir_ficheiros_nuvem()
@@ -676,7 +672,6 @@ with aba_escolas:
         cur_dep_p1 = st.session_state.get("dep_esc_a1", [])
         cur_loc_p1 = st.session_state.get("loc_esc_a1", "Todas")
 
-        # Verifica se o NRE mudou para resetar o município automaticamente em tempo real
         if "last_nre_esc_a1" not in st.session_state:
             st.session_state["last_nre_esc_a1"] = cur_nre_p1
         elif st.session_state["last_nre_esc_a1"] != cur_nre_p1:
@@ -730,9 +725,6 @@ with aba_escolas:
         m1.metric("Escolas Encontradas", fmt_num(qtd_escolas_unicas))
         m2.metric("Ano(s) do Censo", rotulo_ano)
 
-        # ---------------------------------------------------------------------
-        # 1º Bloco: 🔎 Seleção de Visualização Instantânea das Tabelas
-        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea das Tabelas**", expanded=False):
             @st.fragment
             def mostrar_tabelas_por_ano_fragmento():
@@ -895,9 +887,6 @@ with aba_escolas:
 
             mostrar_tabelas_por_ano_fragmento()
 
-        # ---------------------------------------------------------------------
-        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos
-        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos**", expanded=False):
             @st.fragment
             def mostrar_graficos_escolas_fragmento():
@@ -1061,7 +1050,6 @@ with aba_escolas:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # RELATÓRIO DA ABA 1
         @st.fragment
         def fragmento_tabela_escolas():
             with st.expander("⚙️ **Personalizar Colunas Adicionais do Relatório**", expanded=False):
@@ -1092,7 +1080,7 @@ with aba_escolas:
             
             if not df_escolas_exibir.empty:
                 excel_escolas_bytes = converter_df_para_excel(df_escolas_exibir)
-                st.info(f"💡 A apresentar as primeiras 100 escolas. O botão de download exporta todos os {fmt_num(len(df_escolas_exibir))} registros.")
+                st.info(f"💡 A apresentar as primeiras 100 escolas. O botão de download exporta todos os {fmt_num(len(df_escolas_exibir))} registos.")
                 st.dataframe(df_escolas_exibir.head(100), use_container_width=True, height=500)
                 st.download_button(
                     "📥 Baixar Excel (.xlsx)", 
@@ -1138,7 +1126,6 @@ with aba_tecnicos:
         cur_dep_p3 = st.session_state.get("dep_tec", [])
         cur_loc_p3 = st.session_state.get("loc_tec", "Todas")
 
-        # Verifica se o NRE mudou na aba 2 para resetar o município em tempo real
         if "last_nre_tec" not in st.session_state:
             st.session_state["last_nre_tec"] = cur_nre_p3
         elif st.session_state["last_nre_tec"] != cur_nre_p3:
@@ -1193,9 +1180,6 @@ with aba_tecnicos:
         k2.metric("Cursos Distintos Retornados", fmt_num(qtd_cursos_distintos))
         k3.metric("Ano(s) Selecionado(s)", rotulo_ano_tec)
 
-        # ---------------------------------------------------------------------
-        # 1º Bloco Aba 2: 🔎 Seleção de Visualização Instantânea das Tabelas
-        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea das Tabelas**", expanded=False):
             @st.fragment
             def mostrar_tabelas_tecnicos_por_ano_fragmento():
@@ -1426,9 +1410,6 @@ with aba_tecnicos:
 
             mostrar_tabelas_tecnicos_por_ano_fragmento()
 
-        # ---------------------------------------------------------------------
-        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos (Aba 2)
-        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos**", expanded=False):
             @st.fragment
             def mostrar_graficos_tecnicos_fragmento():
@@ -1598,7 +1579,6 @@ with aba_tecnicos:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # RELATÓRIO DA ABA 2
         @st.fragment
         def fragmento_tabela_tecnicos():
             with st.expander("⚙️ **Personalizar Colunas Adicionais do Relatório**", expanded=False):
@@ -1630,7 +1610,7 @@ with aba_tecnicos:
             
             if not df_tecnicos_exibir.empty:
                 excel_tecnicos_bytes = converter_df_para_excel(df_tecnicos_exibir)
-                st.info(f"💡 A apresentar os primeiros 100 cursos. O botão de download exporta todos os {fmt_num(len(df_tecnicos_exibir))} registros.")
+                st.info(f"💡 A apresentar os primeiros 100 cursos. O botão de download exporta todos os {fmt_num(len(df_tecnicos_exibir))} registos.")
                 st.dataframe(df_tecnicos_exibir.head(100), use_container_width=True, height=500)
                 st.download_button(
                     "📥 Baixar Cursos Excel (.xlsx)", 
@@ -1677,7 +1657,6 @@ with aba_obs:
         * **Diurno (`QT_MAT_BAS_D`):** Agrupa os turnos matutino, vespertino e intermediário.
         * **Noturno (`QT_MAT_BAS_N`):** Contabiliza o atendimento noturno.
         """)
-       
 
     with st.container(border=True):
         st.markdown("### 3. Histórico e Série Temporal")
