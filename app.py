@@ -2,11 +2,8 @@ import pandas as pd
 import streamlit as st
 import duckdb
 import os
-import requests
-import time
 import plotly.express as px
 import io
-import re
 
 # =============================================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -552,59 +549,11 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# DOWNLOAD ROBUSTO DO GOOGLE DRIVE (Contorna aviso de ficheiro grande)
+# CARREGAMENTO DOS FICHEIROS DIRETAMENTE DO REPOSITÓRIO GITHUB
 # =============================================================================
-
-def download_google_drive(file_id, destination):
-    URL = f"https://drive.google.com/uc?export=download&id={file_id}"
-    session = requests.Session()
-    
-    response = session.get(URL, stream=True)
-    
-    # Verifica se o Google enviou cookies de aviso de ficheiro grande
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            confirm_url = f"{URL}&confirm={value}"
-            response = session.get(confirm_url, stream=True)
-            break
-    else:
-        # Tenta extrair o token de confirmação diretamente do corpo da resposta HTML
-        content = response.text
-        if "download_warning" in content:
-            match = re.search(r'confirm=([0-9A-Za-z_]+)', content)
-            if match:
-                confirm_code = match.group(1)
-                confirm_url = f"{URL}&confirm={confirm_code}"
-                response = session.get(confirm_url, stream=True)
-
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(32768):
-            if chunk:
-                f.write(chunk)
-# =============================================================================
-# CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Google Drive na Nuvem)
-# =============================================================================
-
-ID_ESCOLAS = "1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
-ID_TECNICOS = "12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 
 CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
 CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
-
-# Executa o download se os ficheiros ainda não existirem na máquina virtual
-if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-    with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
-        try:
-            download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
-        except Exception as e:
-            st.error(f"Erro no download de escolas: {e}")
-
-if not os.path.exists(CAMINHO_TECNICOS):
-    with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
-        try:
-            download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
-        except Exception as e:
-            st.error(f"Erro no download de técnicos: {e}")
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
 def carregar_tabela_escolas(caminho_parquet):
@@ -622,8 +571,9 @@ try:
     df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET)
     df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS)
 except Exception as e:
-    st.error(f"Erro crítico ao carregar os dados para a memória: {e}")
+    st.error(f"Erro crítico ao carregar os dados locais: {e}")
     st.stop()
+
 # =============================================================================
 # TÍTULO E ABAS GLOBAIS
 # =============================================================================
@@ -713,10 +663,10 @@ with aba_escolas:
     where_clause_escolas = " AND ".join(where_esc)
 
     try:
-        df_escolas = consultar_escolas_filtradas_parquet(
-            CAMINHO_ESCOLAS_PARQUET,
-            where_clause_escolas
-        )
+        con = duckdb.connect()
+        sql_esc = f"SELECT * FROM df_escolas_raw" + (" WHERE " + where_clause_escolas if where_clause_escolas else "")
+        df_escolas = con.execute(sql_esc).df()
+        con.close()
 
         rotulo_ano = formatar_anos(ano_esc)
         qtd_escolas_unicas = df_escolas["CO_ENTIDADE"].nunique() if "CO_ENTIDADE" in df_escolas.columns else len(df_escolas)
