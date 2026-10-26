@@ -556,34 +556,31 @@ def converter_df_para_excel(df):
 # =============================================================================
 
 def download_google_drive(file_id, destination):
-    URL = "https://docs.google.com/uc?export=download"
+    URL = f"https://drive.google.com/uc?export=download&id={file_id}"
     session = requests.Session()
-    response = session.get(URL, params={'id': file_id}, stream=True)
     
-    token = None
+    response = session.get(URL, stream=True)
+    
+    # Verifica se o Google enviou cookies de aviso de ficheiro grande
     for key, value in response.cookies.items():
         if key.startswith('download_warning'):
-            token = value
+            confirm_url = f"{URL}&confirm={value}"
+            response = session.get(confirm_url, stream=True)
             break
-            
-    if not token:
-        for line in response.iter_lines():
-            if line:
-                text_line = line.decode('utf-8', errors='ignore')
-                match = re.search(r'confirm=([0-9A-Za-z_]+)', text_line)
-                if match:
-                    token = match.group(1)
-                    break
-                    
-    if token:
-        params = {'id': file_id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-        
+    else:
+        # Tenta extrair o token de confirmação diretamente do corpo da resposta HTML
+        content = response.text
+        if "download_warning" in content:
+            match = re.search(r'confirm=([0-9A-Za-z_]+)', content)
+            if match:
+                confirm_code = match.group(1)
+                confirm_url = f"{URL}&confirm={confirm_code}"
+                response = session.get(confirm_url, stream=True)
+
     with open(destination, "wb") as f:
         for chunk in response.iter_content(32768):
             if chunk:
                 f.write(chunk)
-
 # =============================================================================
 # CAMINHOS E DOWNLOAD AUTOMÁTICO (Local vs Google Drive na Nuvem)
 # =============================================================================
