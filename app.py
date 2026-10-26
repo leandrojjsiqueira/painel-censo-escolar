@@ -591,73 +591,23 @@ def download_google_drive(file_id, destination):
 ID_ESCOLAS = "1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
 ID_TECNICOS = "12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 
-if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
-    CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
-    CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
-else:
-    CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
-    CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
+CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
+CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-    @st.cache_resource
-    def garantir_ficheiros_nuvem():
+# Força o download direto se os ficheiros ainda não existirem na máquina virtual do Streamlit
+if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+    with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive (isto pode demorar 1-2 minutos)..."):
         try:
-            if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-                with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
-                    download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
-                    
-            if not os.path.exists(CAMINHO_TECNICOS):
-                with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
-                    download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
+            download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
         except Exception as e:
-            st.error(f"Erro ao descarregar ficheiros do Google Drive: {e}")
-            st.stop()
+            st.error(f"Erro no download de escolas: {e}")
 
-    garantir_ficheiros_nuvem()
-
-@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
-def carregar_tabela_escolas(caminho_parquet, data_modificacao):
-    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
-    df.columns = df.columns.str.strip().str.upper()
-    return df
-
-@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
-def carregar_tabela_tecnicos(caminho, data_modificacao):
-    con = duckdb.connect()
-    try:
-        if caminho.endswith('.parquet'):
-            df = con.execute(f"SELECT * FROM read_parquet('{caminho}')").df()
-        else:
-            df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
-        df.columns = df.columns.str.strip().str.upper()
-    finally:
-        con.close()
-    return df
-
-@st.cache_data(show_spinner=False)
-def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
-    con = duckdb.connect()
-    try:
-        sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
-        if where_clause:
-            sql += f" WHERE {where_clause}"
-        return con.execute(sql).df()
-    finally:
-        con.close()
-
-if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
-    st.error(f"ERRO: Ficheiro não encontrado. Escolas: {CAMINHO_ESCOLAS_PARQUET} | Técnicos: {CAMINHO_TECNICOS}")
-    st.stop()
-
-DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
-DATA_MOD_TECNICOS = os.path.getmtime(CAMINHO_TECNICOS)
-
-try:
-    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
-    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
-except Exception as e:
-    st.error(f"Erro ao carregar os dados para a memória: {e}")
-    st.stop()
-
+if not os.path.exists(CAMINHO_TECNICOS):
+    with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
+        try:
+            download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
+        except Exception as e:
+            st.error(f"Erro no download de técnicos: {e}")
 # =============================================================================
 # TÍTULO E ABAS GLOBAIS
 # =============================================================================
