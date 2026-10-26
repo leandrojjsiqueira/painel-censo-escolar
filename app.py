@@ -6,6 +6,7 @@ import requests
 import time
 import plotly.express as px
 import io
+import re
 
 # =============================================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -559,13 +560,21 @@ def download_google_drive(file_id, destination):
     session = requests.Session()
     response = session.get(URL, params={'id': file_id}, stream=True)
     
-    # Detetar token de confirmação para ficheiros grandes
     token = None
     for key, value in response.cookies.items():
         if key.startswith('download_warning'):
             token = value
             break
             
+    if not token:
+        for line in response.iter_lines():
+            if line:
+                text_line = line.decode('utf-8', errors='ignore')
+                match = re.search(r'confirm=([0-9A-Za-z_]+)', text_line)
+                if match:
+                    token = match.group(1)
+                    break
+                    
     if token:
         params = {'id': file_id, 'confirm': token}
         response = session.get(URL, params=params, stream=True)
@@ -583,23 +592,25 @@ ID_ESCOLAS = "1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
 ID_TECNICOS = "12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 
 if os.path.exists(r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"):
-    # Caminhos no seu Computador (Local)
     CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
 else:
-    # Caminhos na Nuvem (Streamlit Cloud)
     CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
     CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
     @st.cache_resource
     def garantir_ficheiros_nuvem():
-        if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-            with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
-                download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
-                
-        if not os.path.exists(CAMINHO_TECNICOS):
-            with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
-                download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
+        try:
+            if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+                with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
+                    download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
+                    
+            if not os.path.exists(CAMINHO_TECNICOS):
+                with st.spinner("📥 A descarregar a Tabela de Cursos Técnicos do Google Drive..."):
+                    download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
+        except Exception as e:
+            st.error(f"Erro ao descarregar ficheiros do Google Drive: {e}")
+            st.stop()
 
     garantir_ficheiros_nuvem()
 
@@ -644,8 +655,7 @@ try:
     df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET, DATA_MOD_ESCOLAS)
     df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS, DATA_MOD_TECNICOS)
 except Exception as e:
-    st.error("Erro ao carregar os dados:")
-    st.exception(e)
+    st.error(f"Erro ao carregar os dados para a memória: {e}")
     st.stop()
 
 # =============================================================================
