@@ -552,8 +552,8 @@ def converter_df_para_excel(df):
 # CARREGAMENTO DOS FICHEIROS LOCAIS DO REPOSITÓRIO
 # =============================================================================
 
-CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
-CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
+CAMINHO_ESCOLAS_PARQUET = "data/v1_super_tabela_escolas.parquet"
+CAMINHO_TECNICOS = "data/v2_super_tabela_cursos_tecnicos.parquet"
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
 def carregar_tabela_escolas(caminho):
