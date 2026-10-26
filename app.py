@@ -549,26 +549,64 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# CARREGAMENTO DOS FICHEIROS DIRETAMENTE DO REPOSITÓRIO GITHUB
+# CARREGAMENTO ROBUSTO DOS DADOS (Download Temporário na Nuvem)
 # =============================================================================
+
+import requests
+
+ID_ESCOLAS = "1A_JNQ_0mRLwLxoRiIt5nX2lDpa_55kP3"
+ID_TECNICOS = "12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 
 CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
 CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
-def carregar_tabela_escolas(caminho_parquet):
-    if not os.path.exists(caminho_parquet):
-        st.error(f"Ficheiro não encontrado: {caminho_parquet}")
-        st.stop()
-    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
+def download_google_drive(file_id, destination):
+    URL = f"https://drive.google.com/uc?export=download&id={file_id}"
+    session = requests.Session()
+    response = session.get(URL, stream=True)
+    
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            confirm_url = f"{URL}&confirm={value}"
+            response = session.get(confirm_url, stream=True)
+            break
+    else:
+        content = response.text
+        if "download_warning" in content:
+            match = re.search(r'confirm=([0-9A-Za-z_]+)', content)
+            if match:
+                confirm_code = match.group(1)
+                confirm_url = f"{URL}&confirm={confirm_code}"
+                response = session.get(confirm_url, stream=True)
+
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(32768):
+            if chunk:
+                f.write(chunk)
+
+# Garante o download se os ficheiros ainda não estiverem no espaço temporário da nuvem
+if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
+    with st.spinner("📥 A preparar os dados de Escolas na nuvem..."):
+        try:
+            download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
+        except Exception as e:
+            st.error(f"Erro no download de escolas: {e}")
+
+if not os.path.exists(CAMINHO_TECNICOS):
+    with st.spinner("📥 A preparar os dados de Cursos Técnicos na nuvem..."):
+        try:
+            download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
+        except Exception as e:
+            st.error(f"Erro no download de técnicos: {e}")
+
+@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas para a memória...")
+def carregar_tabela_escolas(caminho):
+    df = pd.read_parquet(caminho, engine="pyarrow")
     df.columns = df.columns.str.strip().str.upper()
     return df
 
-@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
+@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos para a memória...")
 def carregar_tabela_tecnicos(caminho):
-    if not os.path.exists(caminho):
-        st.error(f"Ficheiro não encontrado: {caminho}")
-        st.stop()
     df = pd.read_parquet(caminho, engine="pyarrow")
     df.columns = df.columns.str.strip().str.upper()
     return df
@@ -577,7 +615,7 @@ try:
     df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET)
     df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS)
 except Exception as e:
-    st.error(f"Erro detalhado ao ler o ficheiro Parquet: {e}")
+    st.error(f"Erro crítico ao ler os ficheiros Parquet: {e}")
     st.stop()
 
 # =============================================================================
