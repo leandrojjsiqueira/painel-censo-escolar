@@ -591,9 +591,9 @@ ID_TECNICOS = "12hk4qcTuLSVoiKeChrUH-FCrZ0mQvWYI"
 CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
 CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
-# Força o download direto se os ficheiros ainda não existirem na máquina virtual do Streamlit
+# Executa o download se os ficheiros ainda não existirem na máquina virtual
 if not os.path.exists(CAMINHO_ESCOLAS_PARQUET):
-    with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive (isto pode demorar 1-2 minutos)..."):
+    with st.spinner("📥 A descarregar a Super Tabela de Escolas do Google Drive..."):
         try:
             download_google_drive(ID_ESCOLAS, CAMINHO_ESCOLAS_PARQUET)
         except Exception as e:
@@ -605,6 +605,25 @@ if not os.path.exists(CAMINHO_TECNICOS):
             download_google_drive(ID_TECNICOS, CAMINHO_TECNICOS)
         except Exception as e:
             st.error(f"Erro no download de técnicos: {e}")
+
+@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
+def carregar_tabela_escolas(caminho_parquet):
+    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
+    df.columns = df.columns.str.strip().str.upper()
+    return df
+
+@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
+def carregar_tabela_tecnicos(caminho):
+    df = pd.read_parquet(caminho, engine="pyarrow")
+    df.columns = df.columns.str.strip().str.upper()
+    return df
+
+try:
+    df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET)
+    df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS)
+except Exception as e:
+    st.error(f"Erro crítico ao carregar os dados para a memória: {e}")
+    st.stop()
 # =============================================================================
 # TÍTULO E ABAS GLOBAIS
 # =============================================================================
