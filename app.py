@@ -557,12 +557,18 @@ CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
 def carregar_tabela_escolas(caminho_parquet):
+    if not os.path.exists(caminho_parquet):
+        st.error(f"Ficheiro não encontrado: {caminho_parquet}")
+        st.stop()
     df = pd.read_parquet(caminho_parquet, engine="pyarrow")
     df.columns = df.columns.str.strip().str.upper()
     return df
 
 @st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
 def carregar_tabela_tecnicos(caminho):
+    if not os.path.exists(caminho):
+        st.error(f"Ficheiro não encontrado: {caminho}")
+        st.stop()
     df = pd.read_parquet(caminho, engine="pyarrow")
     df.columns = df.columns.str.strip().str.upper()
     return df
@@ -571,7 +577,7 @@ try:
     df_escolas_raw = carregar_tabela_escolas(CAMINHO_ESCOLAS_PARQUET)
     df_tecnicos_raw = carregar_tabela_tecnicos(CAMINHO_TECNICOS)
 except Exception as e:
-    st.error(f"Erro crítico ao carregar os dados locais: {e}")
+    st.error(f"Erro detalhado ao ler o ficheiro Parquet: {e}")
     st.stop()
 
 # =============================================================================
