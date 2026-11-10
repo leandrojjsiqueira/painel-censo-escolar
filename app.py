@@ -722,7 +722,7 @@ aba_escolas, aba_tecnicos, aba_obs, aba_dic = st.tabs([
 
 with aba_escolas:
     with st.expander("📶 **Painel de Filtros - Escolas**", expanded=True):
-        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a1", width="content"):
+        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a1"):
             for chave in [
                 "ano_esc_a1", "nre_esc_a1", "mun_esc_sel_a1", "dep_esc_a1", "loc_esc_a1",
                 "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
@@ -1216,7 +1216,7 @@ with aba_escolas:
 
 with aba_tecnicos:
     with st.expander("📶 **Painel de Filtros - Cursos Técnicos**", expanded=True):
-        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3", width="content"):
+        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3"):
             for chave in ["ano_tec", "nre_tec", "mun_tec_sel_a3", "dep_tec", "loc_tec", "cod_tec_sel_a3", "nome_tec_sel_a3", "nre_t_v2", "mun_t_v2", "dep_t_v2", "loc_t_v2", "cod_t_busca_v2", "nome_t_busca_v2", "sel_qtd_tec", "sel_mat_tec", "sel_area_inst", "sel_nome_curso_inst", "nre_g2", "mun_g2", "dep_g2", "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2", "sel_qtd_tec_graf", "sel_mat_tec_graf", "sel_area_graf", "sel_nome_curso_graf", "ms_tec_confirmado"]:
                 st.session_state.pop(chave, None)
                 for k in list(st.session_state.keys()):
