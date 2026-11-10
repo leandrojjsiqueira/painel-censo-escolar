@@ -2063,7 +2063,7 @@ with aba_dic:
         caminho_xlsx_inep = None
         if os.path.exists(PASTA_EXCEL_INEP):
             for arquivo in os.listdir(PASTA_EXCEL_INEP):
-                if f"dicionario_censo_{ano_selecionado}" in arquivo and arquivo.endswith(".xlsx") and not arquivo.startswith("~$"):
+                if str(ano_selecionado) in arquivo and arquivo.endswith(".xlsx") and not arquivo.startswith("~$"):
                     caminho_xlsx_inep = os.path.join(PASTA_EXCEL_INEP, arquivo)
                     break
 
