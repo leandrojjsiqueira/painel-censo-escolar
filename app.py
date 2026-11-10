@@ -650,19 +650,29 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# CAMINHOS E CARREGAMENTO
+# CAMINHOS E CARREGAMENTO OTIMIZADOS (Evita estourar a RAM do Streamlit Cloud)
 # =============================================================================
 
-# Caminhos locais para o GitHub / Streamlit Cloud
 CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
 CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
 CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
-@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
+@st.cache_data(show_spinner="A carregar metadados de escolas para os filtros...")
 def carregar_tabela_escolas(caminho_parquet, data_modificacao):
-    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
-    df.columns = df.columns.str.strip().str.upper()
-    return df
+    # Carrega via DuckDB apenas as colunas de identificação e filtros, poupando muita RAM
+    con = duckdb.connect()
+    try:
+        sql = f"""
+            SELECT NU_ANO_CENSO, NO_REGIAO, SG_UF, CO_NRE, NO_NRE, 
+                   CO_MUNICIPIO, NO_MUNICIPIO, CO_ENTIDADE, NO_ENTIDADE, 
+                   TP_DEPENDENCIA, TP_LOCALIZACAO 
+            FROM read_parquet('{caminho_parquet}')
+        """
+        df = con.execute(sql).df()
+        df.columns = df.columns.str.strip().str.upper()
+        return df
+    finally:
+        con.close()
 
 @st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
 def carregar_tabela_tecnicos(caminho, data_modificacao):
