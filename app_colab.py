@@ -47,7 +47,7 @@ st.markdown("""
 # CAMINHOS E CARREGAMENTO DO DICIONÁRIO EXTERNO (ABA 4)
 # =============================================================================
 
-CAMINHO_DICIONARIO_PARQUET = r"C:\Ferramenta_Censo\dicionario_super_tabelas.parquet"
+CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
 @st.cache_data(show_spinner="A carregar dicionário de dados...")
 def carregar_dicionario_dados(caminho_parquet):
@@ -653,10 +653,10 @@ def converter_df_para_excel(df):
 # CAMINHOS E CARREGAMENTO
 # =============================================================================
 
-# Caminhos ajustados para o Google Drive no Colab
-CAMINHO_ESCOLAS_PARQUET = "/content/drive/MyDrive/Painel_Censo_Dados/v1_super_tabela_escolas.parquet"
-CAMINHO_TECNICOS = "/content/drive/MyDrive/Painel_Censo_Dados/v2_super_tabela_cursos_tecnicos.parquet"
-CAMINHO_DICIONARIO_PARQUET = "/content/drive/MyDrive/Painel_Censo_Dados/dicionario_super_tabelas.parquet"
+# Caminhos locais para o GitHub / Streamlit Cloud
+CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
+CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
+CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
 @st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
 def carregar_tabela_escolas(caminho_parquet, data_modificacao):
@@ -688,7 +688,7 @@ def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
         con.close()
 
 if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
-    st.error("ERRO: O arquivo Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
+    st.error("ERRO: O ficheiro Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
     st.stop()
 
 DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
@@ -1806,9 +1806,7 @@ with aba_obs:
 # =============================================================================
 # CAMINHO DO DICIONÁRIO PARQUET
 # =============================================================================
-CAMINHO_DICIONARIO_PARQUET = (
-    r"C:\Ferramenta_Censo\dicionario_super_tabelas.parquet"
-)
+CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
 
 @st.cache_data(show_spinner="A carregar dicionário de dados...")
@@ -1827,7 +1825,6 @@ def carregar_dicionario_dados(caminho_parquet):
     )
 
 
-
 # =============================================================================
 # ABA 4 - DICIONÁRIO DE DADOS (3 COLUNAS)
 # =============================================================================
@@ -1840,8 +1837,8 @@ with aba_dic:
     )
     st.markdown("---")
 
-    # Caminho atualizado para o Google Drive no Colab
-    CAMINHO_DICIONARIO_PARQUET = "/content/drive/MyDrive/Painel_Censo_Dados/dicionario_super_tabelas.parquet"
+    # Caminho ajustado para o GitHub / Streamlit Cloud
+    CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
     df_dicionario = carregar_dicionario_dados(CAMINHO_DICIONARIO_PARQUET)
 
@@ -2038,8 +2035,8 @@ with aba_dic:
         st.markdown("##### ⏬ Baixar Dicionário Oficial do INEP por Ano")
         st.caption("Selecione o ano desejado para efetuar o download do arquivo Excel original INEP.")
 
-        # Pasta dos dicionários do INEP atualizada para o Drive
-        PASTA_EXCEL_INEP = "/content/drive/MyDrive/Painel_Censo_Dados/dicionarios_censo_escolar"
+        # Pasta dos dicionários ajustada para a estrutura do GitHub
+        PASTA_EXCEL_INEP = "dicionarios_censo_escolar"
         anos_disponiveis = list(range(2025, 2006, -1))
 
         col_ano, col_btn = st.columns([1, 2])
@@ -2052,7 +2049,7 @@ with aba_dic:
                 key="sb_ano_dicionario_inep"
             )
 
-        # Procura o arquivo .xlsx original na pasta do Drive
+        # Procura o arquivo .xlsx original na pasta do repositório
         caminho_xlsx_inep = None
         if os.path.exists(PASTA_EXCEL_INEP):
             for arquivo in os.listdir(PASTA_EXCEL_INEP):
