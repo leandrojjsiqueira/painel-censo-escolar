@@ -2046,7 +2046,7 @@ with aba_dic:
         st.caption("Selecione o ano desejado para efetuar o download do arquivo Excel original INEP.")
 
         # Pasta dos dicionários ajustada para a estrutura do GitHub
-        PASTA_EXCEL_INEP = "."
+        PASTA_EXCEL_INEP = "dicionarios_censo_escolar"
         anos_disponiveis = list(range(2025, 2006, -1))
 
         col_ano, col_btn = st.columns([1, 2])
