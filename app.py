@@ -217,7 +217,6 @@ def categorias_metrica_qt(sufixo):
     import re
     s = str(sufixo).strip().upper()
 
-    # Mantém os grupos de características dos alunos
     if s in {"BAS_FEM", "BAS_MASC"}:
         return "Sexo"
 
@@ -233,7 +232,6 @@ def categorias_metrica_qt(sufixo):
     if re.search(r"(^|_)(0_3|4_5|6_10|11_14|15_17|18_MAIS)(_|$)", s):
         return "Faixa Etária"
 
-    # Etapas: Profissional, EJA e Especial
     if (
         s in {"PROF", "EJA", "ESP"}
         or s.startswith(("PROF_", "EJA_", "ESP_"))
@@ -243,8 +241,8 @@ def categorias_metrica_qt(sufixo):
     ):
         return "Etapas: Profissional, EJA e Especial"
 
-    # Todas as demais etapas e modalidades comuns
     return "Etapa Comum"
+
 def descricao_sufixo_qt(sufixo):
     coluna_mat = f"QT_MAT_{sufixo}"
     mapas = [OPCOES_ETAPAS, OPCOES_SEXO, OPCOES_RACA, OPCOES_IDADE, OPCOES_TURNO]
@@ -252,7 +250,6 @@ def descricao_sufixo_qt(sufixo):
         if coluna_mat in mapa:
             return mapa[coluna_mat].split(" (")[0]
 
-    # Mapeamento direto de correções para Faixas Etárias com Data de Referência (REF_31_03)
     mapa_idade_ref = {
         "BAS_0_3_REF_31_03": "0 a 3 anos (Ref. 31/03)",
         "BAS_4_5_REF_31_03": "4 a 5 anos (Ref. 31/03)",
@@ -347,26 +344,8 @@ def construir_opcoes_metricas_qt(colunas_df):
     return grupos, inventario
 
 
-def _sincronizar_selecao_metricas(state_key, todos_key, item_data):
-    selecionados = [
-        rotulo for widget_key, rotulo in item_data
-        if bool(st.session_state.get(widget_key, False))
-    ]
-    st.session_state[state_key] = selecionados
-    st.session_state[todos_key] = bool(item_data) and len(selecionados) == len(item_data)
-
-
-def _alternar_todas_metricas(state_key, todos_key, item_data):
-    marcar = bool(st.session_state.get(todos_key, False))
-    for widget_key, _rotulo in item_data:
-        st.session_state[widget_key] = marcar
-    st.session_state[state_key] = [rotulo for _widget_key, rotulo in item_data] if marcar else []
-
 def _sincronizar_selecao_metricas(state_key, todos_key, item_data, widget_key, rotulo):
-    # Obtém o estado atual acumulado
     selecionados = set(st.session_state.get(state_key, []))
-    
-    # Se o checkbox atual foi marcado, adiciona; se foi desmarcado, remove
     if st.session_state.get(widget_key, False):
         selecionados.add(rotulo)
     else:
@@ -405,7 +384,6 @@ def criar_seletor_metricas(titulo, opcoes, chave):
 
     selecionados_salvos = set(st.session_state.get(state_key, []))
 
-    # Inicializa cada checkbox individual baseado no histórico persistido do grupo
     for widget_key, rotulo in item_data:
         if widget_key not in st.session_state:
             st.session_state[widget_key] = rotulo in selecionados_salvos
@@ -657,7 +635,6 @@ CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
 @st.cache_data(show_spinner="A carregar metadados de escolas para os filtros...")
 def carregar_tabela_escolas(caminho_parquet, data_modificacao):
-    # Carrega via DuckDB apenas as colunas de identificação e filtros, poupando muita RAM
     con = duckdb.connect()
     try:
         sql = f"""
@@ -694,6 +671,210 @@ def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
         return df
     finally:
         con.close()
+
+def quebrar_anos_em_lotes(anos, tamanho=3):
+    """Divide os anos selecionados em lotes pequenos, sem alterar a seleção do usuário."""
+    anos_limpos = sorted({int(a) for a in (anos or [])})
+    for inicio in range(0, len(anos_limpos), tamanho):
+        yield anos_limpos[inicio:inicio + tamanho]
+
+
+def identificador_sql(nome_coluna):
+    """Protege nomes de colunas do Parquet ao utilizá-los em SQL."""
+    return '"' + str(nome_coluna).replace('"', '""') + '"'
+
+
+def obter_colunas_parquet(caminho_parquet):
+    """Obtém somente o esquema do Parquet, sem carregar seus registros."""
+    con = duckdb.connect()
+    try:
+        descricao = con.execute(
+            f"DESCRIBE SELECT * FROM read_parquet('{caminho_parquet}')"
+        ).fetchall()
+        return [str(linha[0]).strip().upper() for linha in descricao]
+    finally:
+        con.close()
+
+
+def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
+                         dependencias=None, localizacao=None, codigo=None, nome=None):
+    """Monta os filtros para uma consulta, permitindo informar os anos por lote."""
+    condicoes = []
+    if where_base:
+        condicoes.append(f"({where_base})")
+
+    if anos:
+        anos_sql = ", ".join(str(int(a)) for a in anos)
+        condicoes.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({anos_sql})")
+
+    if nre and nre not in ["Todas", "Todos"]:
+        valor = str(nre).replace("'", "''")
+        condicoes.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{valor}'")
+
+    if municipio and municipio not in ["Todas", "Todos"]:
+        valor = str(municipio).replace("'", "''")
+        condicoes.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{valor}'")
+
+    if dependencias:
+        ids = [int(str(d).split(" - ")[0]) for d in dependencias]
+        condicoes.append(
+            f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, ids))})"
+        )
+
+    if localizacao and localizacao not in ["Todas", "Todos"]:
+        loc_id = int(str(localizacao).split(" - ")[0])
+        condicoes.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
+
+    if codigo and codigo not in ["Todos", "Todas"]:
+        cod = str(codigo).split(".")[0].strip().replace("'", "''")
+        condicoes.append(
+            f"TRIM(SPLIT_PART(CAST(CO_ENTIDADE AS VARCHAR), '.', 1)) = '{cod}'"
+        )
+
+    if nome and nome not in ["Todas", "Todos"]:
+        valor = str(nome).replace("'", "''")
+        condicoes.append(f"TRIM(CAST(NO_ENTIDADE AS VARCHAR)) = '{valor}'")
+
+    return " AND ".join(condicoes)
+
+
+def consultar_contagens_escolas(caminho_parquet, where_clause):
+    """Retorna contagem de escolas distintas e de registros sem materializar a base."""
+    con = duckdb.connect()
+    try:
+        sql = f"""
+            SELECT
+                COUNT(DISTINCT CO_ENTIDADE) AS ESCOLAS,
+                COUNT(*) AS REGISTROS
+            FROM read_parquet('{caminho_parquet}')
+        """
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        escolas, registros = con.execute(sql).fetchone()
+        return int(escolas or 0), int(registros or 0)
+    finally:
+        con.close()
+
+
+def consultar_somas_metricas_parquet(caminho_parquet, where_clause, colunas):
+    """Soma somente as métricas selecionadas, sem carregar as linhas individuais."""
+    colunas = list(dict.fromkeys(colunas or []))
+    if not colunas:
+        return {}
+
+    expressoes = [
+        f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
+        for col in colunas
+    ]
+    sql = (
+        f"SELECT {', '.join(expressoes)} "
+        f"FROM read_parquet('{caminho_parquet}')"
+    )
+    if where_clause:
+        sql += f" WHERE {where_clause}"
+
+    con = duckdb.connect()
+    try:
+        linha = con.execute(sql).fetchone()
+        return {col: (linha[i] or 0) for i, col in enumerate(colunas)}
+    finally:
+        con.close()
+
+
+def consultar_evolucao_metricas_lotes(caminho_parquet, where_base, anos,
+                                       colunas_mat, colunas_tur, tamanho_lote=3):
+    """Calcula a evolução em lotes de até três anos e retorna somente os totais anuais."""
+    colunas_soma = list(dict.fromkeys((colunas_mat or []) + (colunas_tur or [])))
+    if not anos or not colunas_soma:
+        return pd.DataFrame(columns=["ANO", "Matrículas", "Turmas"])
+
+    expressoes = [
+        f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
+        for col in colunas_soma
+    ]
+    registros = []
+    con = duckdb.connect()
+    try:
+        for lote_anos in quebrar_anos_em_lotes(anos, tamanho_lote):
+            where_lote = montar_where_escolas(where_base, anos=lote_anos)
+            sql = f"""
+                SELECT {sql_int_safe('NU_ANO_CENSO')} AS ANO,
+                       {', '.join(expressoes)}
+                FROM read_parquet('{caminho_parquet}')
+                WHERE {where_lote}
+                GROUP BY ANO
+                ORDER BY ANO
+            """
+            resultado_lote = con.execute(sql).df()
+            for _, linha in resultado_lote.iterrows():
+                valor_mat = sum(float(linha.get(c, 0) or 0) for c in (colunas_mat or []))
+                valor_tur = sum(float(linha.get(c, 0) or 0) for c in (colunas_tur or []))
+                registros.append({
+                    "ANO": int(linha["ANO"]),
+                    "Matrículas": valor_mat,
+                    "Turmas": valor_tur,
+                })
+    finally:
+        con.close()
+
+    return pd.DataFrame(registros, columns=["ANO", "Matrículas", "Turmas"])
+
+
+def consultar_escolas_preview(caminho_parquet, where_clause, colunas, limite=1000):
+    """Carrega somente as colunas do relatório e as primeiras linhas para a tela."""
+    if not colunas:
+        return pd.DataFrame()
+    colunas_sql = ", ".join(identificador_sql(c) for c in colunas)
+    sql = f"SELECT {colunas_sql} FROM read_parquet('{caminho_parquet}')"
+    if where_clause:
+        sql += f" WHERE {where_clause}"
+    sql += f" LIMIT {int(limite)}"
+    con = duckdb.connect()
+    try:
+        df = con.execute(sql).df()
+        df.columns = df.columns.str.strip().str.upper()
+        return df
+    finally:
+        con.close()
+
+
+def exportar_escolas_excel_lotes(caminho_parquet, where_base, anos, colunas, tamanho_lote=3):
+    """Gera o Excel percorrendo lotes de três anos e lotes Arrow menores."""
+    from openpyxl import Workbook
+
+    saida = io.BytesIO()
+    workbook = Workbook(write_only=True)
+    planilha_numero = 1
+    planilha = workbook.create_sheet(title="Relatorio_1")
+    planilha.append(list(colunas))
+    linhas_na_planilha = 0
+    limite_linhas = 1_048_575
+
+    colunas_sql = ", ".join(identificador_sql(c) for c in colunas)
+    con = duckdb.connect()
+    try:
+        lotes = list(quebrar_anos_em_lotes(anos, tamanho_lote)) if anos else [None]
+        for lote_anos in lotes:
+            where_lote = montar_where_escolas(where_base, anos=lote_anos)
+            sql = f"SELECT {colunas_sql} FROM read_parquet('{caminho_parquet}')"
+            if where_lote:
+                sql += f" WHERE {where_lote}"
+
+            with con.sql(sql).to_arrow_reader(batch_size=50_000) as leitor:
+                for lote_arrow in leitor:
+                    for registro in lote_arrow.to_pylist():
+                        if linhas_na_planilha >= limite_linhas:
+                            planilha_numero += 1
+                            planilha = workbook.create_sheet(title=f"Relatorio_{planilha_numero}")
+                            planilha.append(list(colunas))
+                            linhas_na_planilha = 0
+                        planilha.append([registro.get(c) for c in colunas])
+                        linhas_na_planilha += 1
+    finally:
+        con.close()
+
+    workbook.save(saida)
+    return saida.getvalue()
 
 if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
     st.error("ERRO: O ficheiro Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
@@ -787,12 +968,12 @@ with aba_escolas:
             dep_esc = criar_filtro_checkboxes("Rede", op_dep_p1, "dep_esc_a1")
 
     where_esc = []
-    if ano_esc:
-        where_esc.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_esc)})")
-    if nre_esc and nre_esc not in ["Todas", "Todos"] and "NO_NRE" in df_escolas_raw.columns:
-        where_esc.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_esc.replace('\'', '\'\'')}'")
+    if nre_esc and nre_esc not in ["Todas", "Todos"]:
+        valor_nre = str(nre_esc).replace("'", "''")
+        where_esc.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{valor_nre}'")
     if mun_esc and mun_esc != "Todas":
-        where_esc.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_esc.replace('\'', '\'\'')}'")
+        valor_municipio = str(mun_esc).replace("'", "''")
+        where_esc.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{valor_municipio}'")
     if dep_esc:
         deps = [int(d.split(' - ')[0]) for d in dep_esc]
         where_esc.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps))})")
@@ -800,17 +981,43 @@ with aba_escolas:
         loc_id = int(loc_esc.split(' - ')[0])
         where_esc.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
 
-    where_clause_escolas = " AND ".join(where_esc)
+    where_clause_filtros_escolas = " AND ".join(where_esc)
+    where_clause_escolas = montar_where_escolas(
+        where_clause_filtros_escolas,
+        anos=ano_esc
+    )
 
     try:
-        df_escolas = consultar_escolas_filtradas_parquet(
+        colunas_escolas = obter_colunas_parquet(CAMINHO_ESCOLAS_PARQUET)
+        df_escolas = pd.DataFrame(columns=colunas_escolas)
+
+        df_escolas_meta = df_escolas_raw
+        if ano_esc and "NU_ANO_CENSO" in df_escolas_meta.columns:
+            anos_meta = df_escolas_meta["NU_ANO_CENSO"].astype(str).str.split('.').str[0].str.strip()
+            df_escolas_meta = df_escolas_meta.loc[anos_meta.isin([str(a) for a in ano_esc])]
+        if nre_esc and nre_esc not in ["Todas", "Todos"]:
+            df_escolas_meta = df_escolas_meta.loc[
+                df_escolas_meta["NO_NRE"].astype(str).str.strip() == str(nre_esc)
+            ]
+        if mun_esc and mun_esc not in ["Todas", "Todos"]:
+            df_escolas_meta = df_escolas_meta.loc[
+                df_escolas_meta["NO_MUNICIPIO"].astype(str).str.strip() == str(mun_esc)
+            ]
+        if dep_esc:
+            deps_meta = [str(d).split(" - ")[0].strip() for d in dep_esc]
+            dep_meta = df_escolas_meta["TP_DEPENDENCIA"].astype(str).str.split('.').str[0].str.strip()
+            df_escolas_meta = df_escolas_meta.loc[dep_meta.isin(deps_meta)]
+        if loc_esc and loc_esc not in ["Todas", "Todos"]:
+            loc_meta_id = str(loc_esc).split(" - ")[0].strip()
+            loc_meta = df_escolas_meta["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip()
+            df_escolas_meta = df_escolas_meta.loc[loc_meta == loc_meta_id]
+
+        qtd_escolas_unicas, qtd_registros_escolas = consultar_contagens_escolas(
             CAMINHO_ESCOLAS_PARQUET,
             where_clause_escolas
         )
 
         rotulo_ano = formatar_anos(ano_esc)
-        qtd_escolas_unicas = df_escolas["CO_ENTIDADE"].nunique() if "CO_ENTIDADE" in df_escolas.columns else len(df_escolas)
-
         m1, m2 = st.columns(2)
         m1.metric("Escolas Encontradas", fmt_num(qtd_escolas_unicas))
         m2.metric("Ano(s) do Censo", rotulo_ano)
@@ -831,7 +1038,7 @@ with aba_escolas:
                 cur_nome_t1 = st.session_state.get("nome_t_busca_v1", "Todas")
 
                 op_nre_t1, op_mun_t1, op_dep_t1, op_loc_t1, op_cod_t1, op_nome_t1 = get_opcoes_cruzadas_completas(
-                    df_escolas, nre_sel=cur_nre_t1, mun_sel=cur_mun_t1, dep_sel=cur_dep_t1, loc_sel=cur_loc_t1, cod_sel=cur_cod_t1, nome_sel=cur_nome_t1
+                    df_escolas_meta, nre_sel=cur_nre_t1, mun_sel=cur_mun_t1, dep_sel=cur_dep_t1, loc_sel=cur_loc_t1, cod_sel=cur_cod_t1, nome_sel=cur_nome_t1
                 )
 
                 t_fc1, t_fc2, t_fc3, t_fc4, t_fc5, t_fc6 = st.columns(6)
@@ -867,7 +1074,7 @@ with aba_escolas:
                 st.markdown("---")
                 st.markdown("##### Selecione as métricas que deseja exibir nas tabelas abaixo:")
                 
-                grupos_opcoes_t, _ = construir_opcoes_metricas_qt(df_escolas.columns)
+                grupos_opcoes_t, _ = construir_opcoes_metricas_qt(colunas_escolas)
                 selecoes_metricas_t = {}
                 for inicio_grupos in range(0, len(GRUPOS_METRICAS_QT), 4):
                     nomes_linha_grupos = GRUPOS_METRICAS_QT[inicio_grupos:inicio_grupos + 4]
@@ -888,25 +1095,33 @@ with aba_escolas:
                 }
 
                 if grupos_metricas_a1:
-                    df_vis_dinamica = df_escolas.copy()
-                    if nre_t_sel and nre_t_sel not in ["Todas", "Todos"] and "NO_NRE" in df_vis_dinamica.columns:
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["NO_NRE"].astype(str).str.strip() == nre_t_sel]
-                    if mun_t_sel and mun_t_sel not in ["Todas", "Todos"]:
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["NO_MUNICIPIO"].astype(str).str.strip() == mun_t_sel]
-                    if loc_t_sel and loc_t_sel not in ["Todas", "Todos"]:
-                        loc_v_id = str(loc_t_sel).split(' - ')[0].strip()
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["TP_LOCALIZACAO"].astype(str).str.split('.').str[0].str.strip() == loc_v_id]
-                    if dep_t_sel:
-                        deps_v_ids = [str(d.split(' - ')[0]) for d in dep_t_sel]
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["TP_DEPENDENCIA"].astype(str).str.split('.').str[0].str.strip().isin(deps_v_ids)]
-                    if cod_t_sel and cod_t_sel != "Todos":
-                        cod_limpo_t1 = str(cod_t_sel).split('.')[0].strip()
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["CO_ENTIDADE"].astype(str).str.split('.').str[0].str.strip() == cod_limpo_t1]
-                    if nome_t_sel and nome_t_sel not in ["Todas", "Todos"]:
-                        df_vis_dinamica = df_vis_dinamica[df_vis_dinamica["NO_ENTIDADE"].astype(str).str.strip() == nome_t_sel]
+                    where_tabela = montar_where_escolas(
+                        where_clause_filtros_escolas,
+                        anos=[ano_totais_visualizacao] if ano_totais_visualizacao else ano_esc,
+                        nre=nre_t_sel,
+                        municipio=mun_t_sel,
+                        dependencias=dep_t_sel,
+                        localizacao=loc_t_sel,
+                        codigo=cod_t_sel,
+                        nome=nome_t_sel
+                    )
 
-                    anos_v_serie = df_vis_dinamica["NU_ANO_CENSO"].astype(str).str.split(".").str[0].str.strip() if not df_vis_dinamica.empty else pd.Series()
-                    df_ano_calculo = df_vis_dinamica[anos_v_serie == str(ano_totais_visualizacao)] if ano_totais_visualizacao else df_vis_dinamica
+                    colunas_para_somar = []
+                    for _titulo, (selecionados, opcoes) in grupos_metricas_a1.items():
+                        inverso = {rotulo: sufixo for sufixo, rotulo in opcoes.items()}
+                        for rotulo in selecionados:
+                            sufixo = inverso.get(rotulo)
+                            if not sufixo:
+                                continue
+                            for coluna in (f"QT_MAT_{sufixo}", f"QT_TUR_{sufixo}"):
+                                if coluna in colunas_escolas:
+                                    colunas_para_somar.append(coluna)
+
+                    totais_metricas = consultar_somas_metricas_parquet(
+                        CAMINHO_ESCOLAS_PARQUET,
+                        where_tabela,
+                        colunas_para_somar
+                    )
 
                     dados_ano = {}
                     for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_a1.items():
@@ -925,13 +1140,13 @@ with aba_escolas:
                                 continue
                             coluna_mat = f"QT_MAT_{sufixo_metrica}"
                             coluna_tur = f"QT_TUR_{sufixo_metrica}"
-                            tem_mat = coluna_mat in df_ano_calculo.columns
-                            tem_tur = coluna_tur in df_ano_calculo.columns
+                            tem_mat = coluna_mat in colunas_escolas
+                            tem_tur = coluna_tur in colunas_escolas
                             if not tem_mat and not tem_tur:
                                 continue
 
-                            valor_mat = calcular_soma_segura(df_ano_calculo, coluna_mat) if tem_mat else 0
-                            valor_tur = calcular_soma_segura(df_ano_calculo, coluna_tur) if tem_tur else 0
+                            valor_mat = totais_metricas.get(coluna_mat, 0) if tem_mat else 0
+                            valor_tur = totais_metricas.get(coluna_tur, 0) if tem_tur else 0
                             tem_coluna_mat_grupo = tem_coluna_mat_grupo or tem_mat
                             tem_coluna_tur_grupo = tem_coluna_tur_grupo or tem_tur
                             total_matriculas += valor_mat
@@ -1028,7 +1243,7 @@ with aba_escolas:
                 cur_nome_g1 = st.session_state.get("nome_esc_sel_g1", "Todas")
 
                 op_nre_g1, op_mun_g1, op_dep_g1, op_loc_g1, op_cod_g1, op_nome_g1 = get_opcoes_cruzadas_completas(
-                    df_escolas, nre_sel=cur_nre_g1, mun_sel=cur_mun_g1, dep_sel=cur_dep_g1, loc_sel=cur_loc_g1, cod_sel=cur_cod_g1, nome_sel=cur_nome_g1
+                    df_escolas_meta, nre_sel=cur_nre_g1, mun_sel=cur_mun_g1, dep_sel=cur_dep_g1, loc_sel=cur_loc_g1, cod_sel=cur_cod_g1, nome_sel=cur_nome_g1
                 )
 
                 g_c1, g_c2, g_c3, g_c4, g_c5, g_c6 = st.columns(6)
@@ -1047,7 +1262,7 @@ with aba_escolas:
 
                 st.markdown("##### Métrica Específica para o Gráfico")
                 
-                grupos_opcoes_g = construir_opcoes_metricas_qt(df_escolas.columns)[0]
+                grupos_opcoes_g = construir_opcoes_metricas_qt(colunas_escolas)[0]
                 selecoes_metricas_g = {}
                 for inicio_grupos in range(0, len(GRUPOS_METRICAS_QT), 4):
                     nomes_linha_grupos = GRUPOS_METRICAS_QT[inicio_grupos:inicio_grupos + 4]
@@ -1068,53 +1283,45 @@ with aba_escolas:
                 }
 
                 if grupos_metricas_a2:
-                    df_graf_base = df_escolas.copy()
-                    if not df_graf_base.empty:
-                        df_graf_base['ANO_INT'] = df_graf_base['NU_ANO_CENSO'].astype(str).str.split('.').str[0].astype(int)
-                        df_graf_base = df_graf_base[
-                            (df_graf_base['ANO_INT'] >= anos_selecionados[0]) & 
-                            (df_graf_base['ANO_INT'] <= anos_selecionados[1])
-                        ]
-
-                        if nre_esc_graf and nre_esc_graf not in ["Todas", "Todos"] and "NO_NRE" in df_graf_base.columns:
-                            df_graf_base = df_graf_base[df_graf_base['NO_NRE'].astype(str).str.strip() == nre_esc_graf]
-                        if mun_esc_graf and mun_esc_graf not in ["Todas", "Todos"]:
-                            df_graf_base = df_graf_base[df_graf_base['NO_MUNICIPIO'].astype(str).str.strip() == mun_esc_graf]
-                        if loc_esc_graf and loc_esc_graf not in ["Todas", "Todos"]:
-                            loc_g_id = str(loc_esc_graf).split(' - ')[0].strip()
-                            df_graf_base = df_graf_base[df_graf_base['TP_LOCALIZACAO'].astype(str).str.split('.').str[0].str.strip() == loc_g_id]
-                        if dep_esc_graf:
-                            deps_g_ids = [str(d.split(' - ')[0]) for d in dep_esc_graf]
-                            df_graf_base = df_graf_base[df_graf_base['TP_DEPENDENCIA'].astype(str).str.split('.').str[0].str.strip().isin(deps_g_ids)]
-                        if cod_esc_sel_g and cod_esc_sel_g != "Todos":
-                            cod_limpo_g1 = str(cod_esc_sel_g).split('.')[0].strip()
-                            df_graf_base = df_graf_base[df_graf_base['CO_ENTIDADE'].astype(str).str.split('.').str[0].str.strip() == cod_limpo_g1]
-                        if nome_esc_sel_g and nome_esc_sel_g not in ["Todas", "Todos"]:
-                            df_graf_base = df_graf_base[df_graf_base['NO_ENTIDADE'].astype(str).str.strip() == nome_esc_sel_g]
+                    anos_grafico = [
+                        str(a) for a in (ano_esc or anos_disponiveis)
+                        if anos_selecionados[0] <= int(a) <= anos_selecionados[1]
+                    ]
+                    where_grafico = montar_where_escolas(
+                        where_clause_filtros_escolas,
+                        nre=nre_esc_graf,
+                        municipio=mun_esc_graf,
+                        dependencias=dep_esc_graf,
+                        localizacao=loc_esc_graf,
+                        codigo=cod_esc_sel_g,
+                        nome=nome_esc_sel_g
+                    )
 
                     for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_a2.items():
                         sufixos_grupo = extrair_chaves_por_rotulos(selecionados_grupo, opcoes_grupo)
                         if not sufixos_grupo:
                             continue
 
-                        colunas_mat_grupo = [f"QT_MAT_{s}" for s in sufixos_grupo if f"QT_MAT_{s}" in df_graf_base.columns]
-                        colunas_turma_grupo = [f"QT_TUR_{s}" for s in sufixos_grupo if f"QT_TUR_{s}" in df_graf_base.columns]
-                        cols_necessarias = list(dict.fromkeys(["ANO_INT"] + colunas_mat_grupo + colunas_turma_grupo))
-                        cols_presentes = [c for c in cols_necessarias if c in df_graf_base.columns]
+                        colunas_mat_grupo = [
+                            f"QT_MAT_{s}" for s in sufixos_grupo
+                            if f"QT_MAT_{s}" in colunas_escolas
+                        ]
+                        colunas_turma_grupo = [
+                            f"QT_TUR_{s}" for s in sufixos_grupo
+                            if f"QT_TUR_{s}" in colunas_escolas
+                        ]
 
-                        if df_graf_base.empty or not (colunas_mat_grupo or colunas_turma_grupo) or not cols_presentes:
+                        if not (colunas_mat_grupo or colunas_turma_grupo) or not anos_grafico:
                             continue
 
-                        df_sub_grupo = df_graf_base[cols_presentes]
-                        registos_agrupados = []
-                        for ano_idx, df_sub in df_sub_grupo.groupby('ANO_INT'):
-                            registos_agrupados.append({
-                                'ANO': ano_idx,
-                                'Matrículas': sum(calcular_soma_segura(df_sub, c) for c in colunas_mat_grupo if c in df_sub.columns),
-                                'Turmas': sum(calcular_soma_segura(df_sub, c) for c in colunas_turma_grupo if c in df_sub.columns)
-                            })
-
-                        df_agrupado = pd.DataFrame(registos_agrupados)
+                        df_agrupado = consultar_evolucao_metricas_lotes(
+                            CAMINHO_ESCOLAS_PARQUET,
+                            where_grafico,
+                            anos_grafico,
+                            colunas_mat_grupo,
+                            colunas_turma_grupo,
+                            tamanho_lote=3
+                        )
                         if df_agrupado.empty:
                             continue
 
@@ -1176,7 +1383,7 @@ with aba_escolas:
         def fragmento_tabela_escolas():
             with st.expander("⚙️ **Personalizar Colunas Adicionais do Relatório**", expanded=False):
                 st.caption("🔒 As colunas de identificação, localização, NRE, rede e código do município são fixadas automaticamente.")
-                todas_cols_esc = list(df_escolas.columns) if not df_escolas.empty else []
+                todas_cols_esc = list(colunas_escolas)
                 cols_obrigatorias_esc = [
                     'NU_ANO_CENSO', 'NO_REGIAO', 'SG_UF', 'CO_NRE', 'NO_NRE',
                     'CO_MUNICIPIO', 'NO_MUNICIPIO', 'CO_ENTIDADE', 'NO_ENTIDADE',
@@ -1186,8 +1393,8 @@ with aba_escolas:
 
                 with st.form("form_cols_esc"):
                     cols_extras_rascunho = st.multiselect(
-                        "Marque colunas extras:", 
-                        options=cols_opcionais_disponiveis, 
+                        "Marque colunas extras:",
+                        options=cols_opcionais_disponiveis,
                         default=st.session_state.get("ms_esc_confirmado", [])
                     )
                     btn_inserir_esc = st.form_submit_button("✔️ Inserir Colunas")
@@ -1196,20 +1403,53 @@ with aba_escolas:
 
             cols_extras_sel = st.session_state.get("ms_esc_confirmado", [])
             cols_finais_esc = list(dict.fromkeys(cols_obrigatorias_esc + cols_extras_sel))
-            cols_finais_validas = [c for c in cols_finais_esc if c in df_escolas.columns]
+            cols_finais_validas = [c for c in cols_finais_esc if c in colunas_escolas]
 
-            df_escolas_exibir = df_escolas[cols_finais_validas] if not df_escolas.empty and cols_finais_validas else df_escolas
-            
+            where_relatorio = montar_where_escolas(
+                where_clause_filtros_escolas,
+                anos=ano_esc
+            )
+            df_escolas_exibir = consultar_escolas_preview(
+                CAMINHO_ESCOLAS_PARQUET,
+                where_relatorio,
+                cols_finais_validas,
+                limite=1000
+            )
+
             if not df_escolas_exibir.empty:
-                excel_escolas_bytes = converter_df_para_excel(df_escolas_exibir)
-                st.info(f"💡 A apresentar as primeiras 1000 escolas. O botão de download exporta todos os {fmt_num(len(df_escolas_exibir))} registros.")
-                st.dataframe(df_escolas_exibir.head(1000), use_container_width=True, height=500)
-                st.download_button(
-                    "📥 Baixar Excel (.xlsx)", 
-                    data=excel_escolas_bytes, 
-                    file_name="censo_escolas.xlsx", 
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                assinatura_export = (
+                    where_clause_filtros_escolas,
+                    tuple(sorted(str(a) for a in (ano_esc or []))),
+                    tuple(cols_finais_validas)
                 )
+                if st.session_state.get("_assinatura_export_escolas") != assinatura_export:
+                    st.session_state.pop("_excel_escolas_bytes", None)
+                    st.session_state["_assinatura_export_escolas"] = assinatura_export
+
+                st.info(
+                    f"💡 A apresentar as primeiras 1000 escolas. "
+                    f"O botão abaixo prepara o Excel com todos os {fmt_num(qtd_registros_escolas)} registros."
+                )
+                st.dataframe(df_escolas_exibir, use_container_width=True, height=500)
+
+                if st.button("📄 Preparar arquivo Excel", key="btn_preparar_excel_escolas"):
+                    with st.spinner("Preparando o Excel em lotes de três anos..."):
+                        st.session_state["_excel_escolas_bytes"] = exportar_escolas_excel_lotes(
+                            CAMINHO_ESCOLAS_PARQUET,
+                            where_clause_filtros_escolas,
+                            ano_esc,
+                            cols_finais_validas,
+                            tamanho_lote=3
+                        )
+
+                if st.session_state.get("_excel_escolas_bytes") is not None:
+                    st.download_button(
+                        "📥 Baixar Excel (.xlsx)",
+                        data=st.session_state["_excel_escolas_bytes"],
+                        file_name="censo_escolas.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_excel_escolas"
+                    )
             else:
                 st.warning("Nenhum resultado encontrado.")
 
@@ -1812,28 +2052,6 @@ with aba_obs:
         st.write("Esta plataforma exibe resultados consolidados e gráficos sobre matrículas, turmas e cursos. Para a realização de análises avançadas ou cálculo de outros quantitativos específicos, é disponibilizado ao final de cada aba um arquivo em formato Excel (.xlsx) para download completo dos dados filtrados.")
 
 # =============================================================================
-# CAMINHO DO DICIONÁRIO PARQUET
-# =============================================================================
-CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
-
-
-@st.cache_data(show_spinner="A carregar dicionário de dados...")
-def carregar_dicionario_dados(caminho_parquet):
-  if os.path.exists(caminho_parquet):
-    df = pd.read_parquet(caminho_parquet)
-    return df
-  else:
-    st.warning(f"Ficheiro de dicionário não encontrado em: {caminho_parquet}")
-    return pd.DataFrame(
-        columns=[
-            "NOME_DA_COLUNA",
-            "NOME_NO_DICIONARIO",
-            "INTERPRETACAO_AMIGAVEL_APP",
-        ]
-    )
-
-
-# =============================================================================
 # ABA 4 - DICIONÁRIO DE DADOS (3 COLUNAS)
 # =============================================================================
 
@@ -1844,9 +2062,6 @@ with aba_dic:
         " dicionário e interpretações amigáveis do painel."
     )
     st.markdown("---")
-
-    # Caminho ajustado para o GitHub / Streamlit Cloud
-    CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
     df_dicionario = carregar_dicionario_dados(CAMINHO_DICIONARIO_PARQUET)
 
@@ -1863,7 +2078,6 @@ with aba_dic:
             texto = re.sub(r"[\W_]+", " ", texto)
             return " ".join(texto.split())
 
-        # Normalização que preserva os separadores especiais
         def normalizar_preservando_separadores(texto):
             texto = unicodedata.normalize("NFD", str(texto))
             texto = "".join(
@@ -1872,10 +2086,7 @@ with aba_dic:
                 if unicodedata.category(caractere) != "Mn"
             )
             texto = texto.lower()
-
-            # Remove espaços ao redor dos separadores, mas os preserva
             texto = re.sub(r"\s*([/._-])\s*", r"\1", texto)
-
             return " ".join(texto.split())
 
         entrada_pesquisa_dic = st.text_input(
@@ -1883,48 +2094,26 @@ with aba_dic:
             placeholder="Ex: QT_MAT_EJA, Fundamental Anos Finais, NRE...",
         ).strip()
 
-        # Pesquisa tradicional, mantendo os tratamentos anteriores
         termo_pesquisa_dic = normalizar_texto(entrada_pesquisa_dic)
-
-        # Identifica os trechos digitados com separadores especiais
-        consulta_preservada = normalizar_preservando_separadores(
-            entrada_pesquisa_dic
-        )
-
-        fragmentos_com_separador = re.findall(
-            r"[^\s]*[-/._][^\s]*",
-            consulta_preservada
-        )
+        consulta_preservada = normalizar_preservando_separadores(entrada_pesquisa_dic)
+        fragmentos_com_separador = re.findall(r"[^\s]*[-/._][^\s]*", consulta_preservada)
 
         if termo_pesquisa_dic:
             termos = termo_pesquisa_dic.split()
 
             def linha_corresponde(row):
-
-                # Textos originais normalizados, preservando os separadores
                 textos_originais = [
                     normalizar_preservando_separadores(valor)
                     for valor in row
                 ]
 
-                # ---------------------------------------------------------
-                # NOVO TRATAMENTO:
-                # Exige os separadores quando forem utilizados na pesquisa
-                # ---------------------------------------------------------
-
                 if fragmentos_com_separador:
-
                     for fragmento in fragmentos_com_separador:
-
                         if not any(
                             fragmento in texto
                             for texto in textos_originais
                         ):
                             return False
-
-                # ---------------------------------------------------------
-                # DEMAIS TRATAMENTOS EXISTENTES
-                # ---------------------------------------------------------
 
                 textos = [
                     normalizar_texto(valor)
@@ -1940,8 +2129,6 @@ with aba_dic:
                 texto_compacto_original = "".join(palavras)
 
                 def termo_corresponde(termo):
-
-                    # Tratamento de singular e plural com S
                     variantes_termo = [termo]
 
                     if termo.endswith("s") and len(termo) > 1:
@@ -1949,9 +2136,7 @@ with aba_dic:
                     else:
                         variantes_termo.append(termo + "s")
 
-                    # Verifica cada possibilidade do termo pesquisado
                     for termo_variante in variantes_termo:
-
                         palavras_busca = [
                             palavra
                             for palavra in palavras
@@ -1966,7 +2151,6 @@ with aba_dic:
 
                         texto_compacto = "".join(palavras_busca)
 
-                        # Busca por início da palavra ou junção de palavras
                         if (
                             any(
                                 palavra.startswith(termo_variante)
@@ -1976,13 +2160,10 @@ with aba_dic:
                         ):
                             return True
 
-                        # Tratamento de variação de gênero: A / O
                         if termo_variante.endswith("o"):
                             variante_genero = termo_variante[:-1] + "a"
-
                         elif termo_variante.endswith("a"):
                             variante_genero = termo_variante[:-1] + "o"
-
                         else:
                             variante_genero = None
 
@@ -1998,7 +2179,6 @@ with aba_dic:
 
                     return False
 
-                # Todos os termos digitados precisam ser encontrados
                 return all(
                     termo_corresponde(termo)
                     for termo in termos
@@ -2008,9 +2188,7 @@ with aba_dic:
                 linha_corresponde,
                 axis=1
             )
-
             df_dicionario_exibir = df_dicionario[mask]
-
         else:
             df_dicionario_exibir = df_dicionario
 
@@ -2037,13 +2215,9 @@ with aba_dic:
 
         st.markdown("---")
 
-        # =====================================================================
-        # SEÇÃO: BAIXAR DICIONÁRIO OFICIAL DO INEP POR ANO (EXCEL ORIGINAL)
-        # =====================================================================
         st.markdown("##### ⏬ Baixar Dicionário Oficial do INEP por Ano")
         st.caption("Selecione o ano desejado para efetuar o download do arquivo Excel original INEP.")
 
-        # Pasta dos dicionários ajustada para a estrutura do GitHub
         PASTA_EXCEL_INEP = "dicionarios_censo_escolar"
         anos_disponiveis = list(range(2025, 2006, -1))
 
@@ -2057,7 +2231,6 @@ with aba_dic:
                 key="sb_ano_dicionario_inep"
             )
 
-        # Procura o arquivo .xlsx original na pasta do repositório
         caminho_xlsx_inep = None
         if os.path.exists(PASTA_EXCEL_INEP):
             for arquivo in os.listdir(PASTA_EXCEL_INEP):
