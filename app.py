@@ -12,7 +12,6 @@ import re
 # CONFIGURAÇÃO DA PÁGINA
 # =============================================================================
 
-# Garante que a porta 8501 seja configurada automaticamente via código
 streamlit_dir = os.path.join(os.path.expanduser("~"), ".streamlit")
 config_path = os.path.join(streamlit_dir, "config.toml")
 
@@ -242,6 +241,7 @@ def categorias_metrica_qt(sufixo):
         return "Etapas: Profissional, EJA e Especial"
 
     return "Etapa Comum"
+
 
 def descricao_sufixo_qt(sufixo):
     coluna_mat = f"QT_MAT_{sufixo}"
@@ -526,13 +526,14 @@ def criar_filtro_selectbox(titulo, opcoes, key, valor_padrao="Todas"):
         st.session_state[key] = valor_atual
     return st.selectbox(titulo, options=opcoes, index=opcoes.index(valor_atual), key=key, help=f"Selecione uma opção ou '{valor_padrao}' para incluir todos")
 
-def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=None, loc_sel=None, cod_sel=None, nome_sel=None):
+def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=None, loc_sel=None, cod_sel=None, nome_sel=None, regular_sel=None):
     nre_ativo = nre_sel if nre_sel not in [None, "", "Todas", "Todos"] else None
     dep_sel = list(dep_sel or [])
     loc_ativo = loc_sel if loc_sel not in [None, "", "Todas", "Todos"] else None
     mun_ativo = mun_sel if mun_sel not in [None, "", "Todas", "Todos"] else None
     cod_ativo = str(cod_sel).split(".")[0].strip() if cod_sel not in [None, "", "Todos"] else None
     nome_ativo = str(nome_sel).strip() if nome_sel not in [None, "", "Todas", "Todos"] else None
+    regular_ativo = str(regular_sel).strip() if regular_sel not in [None, "", "Todas", "Todos"] else None
 
     def aplicar_filtros(exceto=None):
         df = df_in
@@ -550,6 +551,9 @@ def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=Non
             df = df[df["CO_ENTIDADE"].astype(str).str.split(".").str[0].str.strip() == cod_ativo]
         if exceto != "nome" and nome_ativo is not None and "NO_ENTIDADE" in df.columns:
             df = df[df["NO_ENTIDADE"].astype(str).str.strip() == nome_ativo]
+        if exceto != "regular" and regular_ativo is not None and "IN_REGULAR" in df.columns:
+            reg_id = regular_ativo.split(" - ")[0].strip()
+            df = df[df["IN_REGULAR"].astype(str).str.split(".").str[0].str.strip() == reg_id]
         return df
 
     df_nre = aplicar_filtros("nre")
@@ -572,6 +576,7 @@ def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=Non
 
     dic_dep = {k: v for k, v in MAP_DEPENDENCIA.items() if k in op_dep}
     dic_loc = {k: v for k, v in MAP_LOCALIZACAO.items() if k in op_loc}
+    op_regular = ["1 - Sim", "0 - Não"]
 
     return (
         ["Todas"] + op_nre,
@@ -579,7 +584,8 @@ def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=Non
         dic_dep,
         ["Todas"] + list(dic_loc.values()),
         ["Todos"] + op_cod,
-        ["Todas"] + op_nome
+        ["Todas"] + op_nome,
+        ["Todas"] + op_regular
     )
 
 def sql_int_safe(coluna):
@@ -640,7 +646,7 @@ def carregar_tabela_escolas(caminho_parquet, data_modificacao):
         sql = f"""
             SELECT NU_ANO_CENSO, NO_REGIAO, SG_UF, CO_NRE, NO_NRE, 
                    CO_MUNICIPIO, NO_MUNICIPIO, CO_ENTIDADE, NO_ENTIDADE, 
-                   TP_DEPENDENCIA, TP_LOCALIZACAO 
+                   TP_DEPENDENCIA, TP_LOCALIZACAO, IN_REGULAR 
             FROM read_parquet('{caminho_parquet}')
         """
         df = con.execute(sql).df()
@@ -673,19 +679,14 @@ def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
         con.close()
 
 def quebrar_anos_em_lotes(anos, tamanho=3):
-    """Divide os anos selecionados em lotes pequenos, sem alterar a seleção do usuário."""
     anos_limpos = sorted({int(a) for a in (anos or [])})
     for inicio in range(0, len(anos_limpos), tamanho):
         yield anos_limpos[inicio:inicio + tamanho]
 
-
 def identificador_sql(nome_coluna):
-    """Protege nomes de colunas do Parquet ao utilizá-los em SQL."""
     return '"' + str(nome_coluna).replace('"', '""') + '"'
 
-
 def obter_colunas_parquet(caminho_parquet):
-    """Obtém somente o esquema do Parquet, sem carregar seus registros."""
     con = duckdb.connect()
     try:
         descricao = con.execute(
@@ -695,10 +696,8 @@ def obter_colunas_parquet(caminho_parquet):
     finally:
         con.close()
 
-
 def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
                          dependencias=None, localizacao=None, codigo=None, nome=None):
-    """Monta os filtros para uma consulta, permitindo informar os anos por lote."""
     condicoes = []
     if where_base:
         condicoes.append(f"({where_base})")
@@ -737,9 +736,7 @@ def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
 
     return " AND ".join(condicoes)
 
-
 def consultar_contagens_escolas(caminho_parquet, where_clause):
-    """Retorna contagem de escolas distintas e de registros sem materializar a base."""
     con = duckdb.connect()
     try:
         sql = f"""
@@ -755,9 +752,7 @@ def consultar_contagens_escolas(caminho_parquet, where_clause):
     finally:
         con.close()
 
-
 def consultar_somas_metricas_parquet(caminho_parquet, where_clause, colunas):
-    """Soma somente as métricas selecionadas, sem carregar as linhas individuais."""
     colunas = list(dict.fromkeys(colunas or []))
     if not colunas:
         return {}
@@ -780,10 +775,8 @@ def consultar_somas_metricas_parquet(caminho_parquet, where_clause, colunas):
     finally:
         con.close()
 
-
 def consultar_evolucao_metricas_lotes(caminho_parquet, where_base, anos,
                                        colunas_mat, colunas_tur, tamanho_lote=3):
-    """Calcula a evolução em lotes de até três anos e retorna somente os totais anuais."""
     colunas_soma = list(dict.fromkeys((colunas_mat or []) + (colunas_tur or [])))
     if not anos or not colunas_soma:
         return pd.DataFrame(columns=["ANO", "Matrículas", "Turmas"])
@@ -819,9 +812,7 @@ def consultar_evolucao_metricas_lotes(caminho_parquet, where_base, anos,
 
     return pd.DataFrame(registros, columns=["ANO", "Matrículas", "Turmas"])
 
-
 def consultar_escolas_preview(caminho_parquet, where_clause, colunas, limite=1000):
-    """Carrega somente as colunas do relatório e as primeiras linhas para a tela."""
     if not colunas:
         return pd.DataFrame()
     colunas_sql = ", ".join(identificador_sql(c) for c in colunas)
@@ -837,9 +828,7 @@ def consultar_escolas_preview(caminho_parquet, where_clause, colunas, limite=100
     finally:
         con.close()
 
-
 def exportar_escolas_excel_lotes(caminho_parquet, where_base, anos, colunas, tamanho_lote=3):
-    """Gera o Excel percorrendo lotes de três anos e lotes Arrow menores."""
     from openpyxl import Workbook
 
     saida = io.BytesIO()
@@ -914,7 +903,7 @@ with aba_escolas:
         if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a1"):
             for chave in [
                 "ano_esc_a1", "nre_esc_a1", "mun_esc_sel_a1", "dep_esc_a1", "loc_esc_a1",
-                "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
+                "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "reg_t_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
                 "nre_g1", "mun_g1", "dep_g1", "loc_g1", "cod_esc_busca_g1", "nome_esc_busca_g1", "sel_etapa_a2", "sel_sexo_a2", "sel_raca_a2", "sel_idade_a2", "sel_turno_a2",
                 "ms_esc_confirmado"
             ]:
@@ -950,7 +939,7 @@ with aba_escolas:
             st.session_state["last_nre_esc_a1"] = cur_nre_p1
             st.rerun()
 
-        op_nre_p1, op_mun_p1, op_dep_p1, op_loc_p1, _, _ = get_opcoes_cruzadas_completas(
+        op_nre_p1, op_mun_p1, op_dep_p1, op_loc_p1, _, _, _ = get_opcoes_cruzadas_completas(
             df_esc_ano, nre_sel=cur_nre_p1, mun_sel=cur_mun_p1, dep_sel=cur_dep_p1, loc_sel=cur_loc_p1
         )
 
@@ -989,7 +978,6 @@ with aba_escolas:
 
     try:
         colunas_escolas = obter_colunas_parquet(CAMINHO_ESCOLAS_PARQUET)
-        df_escolas = pd.DataFrame(columns=colunas_escolas)
 
         df_escolas_meta = df_escolas_raw
         if ano_esc and "NU_ANO_CENSO" in df_escolas_meta.columns:
@@ -1036,12 +1024,13 @@ with aba_escolas:
                 cur_loc_t1 = st.session_state.get("loc_t_v1", "Todas")
                 cur_cod_t1 = st.session_state.get("cod_t_busca_v1", "Todos")
                 cur_nome_t1 = st.session_state.get("nome_t_busca_v1", "Todas")
+                cur_reg_t1 = st.session_state.get("reg_t_v1", "Todas")
 
-                op_nre_t1, op_mun_t1, op_dep_t1, op_loc_t1, op_cod_t1, op_nome_t1 = get_opcoes_cruzadas_completas(
-                    df_escolas_meta, nre_sel=cur_nre_t1, mun_sel=cur_mun_t1, dep_sel=cur_dep_t1, loc_sel=cur_loc_t1, cod_sel=cur_cod_t1, nome_sel=cur_nome_t1
+                op_nre_t1, op_mun_t1, op_dep_t1, op_loc_t1, op_cod_t1, op_nome_t1, op_reg_t1 = get_opcoes_cruzadas_completas(
+                    df_escolas_meta, nre_sel=cur_nre_t1, mun_sel=cur_mun_t1, dep_sel=cur_dep_t1, loc_sel=cur_loc_t1, cod_sel=cur_cod_t1, nome_sel=cur_nome_t1, regular_sel=cur_reg_t1
                 )
 
-                t_fc1, t_fc2, t_fc3, t_fc4, t_fc5, t_fc6 = st.columns(6)
+                t_fc1, t_fc2, t_fc3, t_fc4, t_fc5, t_fc6, t_fc7 = st.columns(7)
                 with t_fc1: 
                     nre_t_sel = criar_filtro_selectbox("Núcleo Regional", op_nre_t1, "nre_t_v1", "Todas")
                 with t_fc2: 
@@ -1053,6 +1042,8 @@ with aba_escolas:
                 with t_fc5: 
                     nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas")
                 with t_fc6: 
+                    reg_t_sel = criar_filtro_selectbox("Regular", op_reg_t1, "reg_t_v1", "Todas")
+                with t_fc7: 
                     dep_t_sel = criar_filtro_checkboxes("Rede", op_dep_t1, "dep_t_v1")
 
                 if len(ano_esc) > 1:
@@ -1105,6 +1096,9 @@ with aba_escolas:
                         codigo=cod_t_sel,
                         nome=nome_t_sel
                     )
+                    if reg_t_sel and reg_t_sel not in ["Todas", "Todos"]:
+                        reg_id = reg_t_sel.split(" - ")[0].strip()
+                        where_tabela += f" AND {sql_int_safe('IN_REGULAR')} = {reg_id}"
 
                     colunas_para_somar = []
                     for _titulo, (selecionados, opcoes) in grupos_metricas_a1.items():
@@ -1242,7 +1236,7 @@ with aba_escolas:
                 cur_cod_g1 = st.session_state.get("cod_esc_sel_g1", "Todos")
                 cur_nome_g1 = st.session_state.get("nome_esc_sel_g1", "Todas")
 
-                op_nre_g1, op_mun_g1, op_dep_g1, op_loc_g1, op_cod_g1, op_nome_g1 = get_opcoes_cruzadas_completas(
+                op_nre_g1, op_mun_g1, op_dep_g1, op_loc_g1, op_cod_g1, op_nome_g1, _ = get_opcoes_cruzadas_completas(
                     df_escolas_meta, nre_sel=cur_nre_g1, mun_sel=cur_mun_g1, dep_sel=cur_dep_g1, loc_sel=cur_loc_g1, cod_sel=cur_cod_g1, nome_sel=cur_nome_g1
                 )
 
@@ -1382,7 +1376,7 @@ with aba_escolas:
         @st.fragment
         def fragmento_tabela_escolas():
             with st.expander("⚙️ **Personalizar Colunas Adicionais do Relatório**", expanded=False):
-                st.caption("🔒 As colunas de identificação, localização, NRE, rede e código do município são fixadas automaticamente.")
+                st.caption("🔒 As colunas de identificação, localização, NRE, rede, regularidade e código do município são fixadas automaticamente.")
                 todas_cols_esc = list(colunas_escolas)
                 cols_obrigatorias_esc = [
                     'NU_ANO_CENSO', 'NO_REGIAO', 'SG_UF', 'CO_NRE', 'NO_NRE',
@@ -1495,7 +1489,7 @@ with aba_tecnicos:
             st.session_state["last_nre_tec"] = cur_nre_p3
             st.rerun()
 
-        op_nre_p3, op_mun_p3, op_dep_p3, op_loc_p3, _, _ = get_opcoes_cruzadas_completas(
+        op_nre_p3, op_mun_p3, op_dep_p3, op_loc_p3, _, _, _ = get_opcoes_cruzadas_completas(
             df_tec_ano, nre_sel=cur_nre_p3, mun_sel=cur_mun_p3, dep_sel=cur_dep_p3, loc_sel=cur_loc_p3
         )
 
@@ -1557,7 +1551,7 @@ with aba_tecnicos:
                 cur_cod_tt = st.session_state.get("cod_t_busca_v2", "Todos")
                 cur_nome_tt = st.session_state.get("nome_t_busca_v2", "Todas")
 
-                op_nre_tt, op_mun_tt, op_dep_tt, op_loc_tt, op_cod_tt, op_nome_tt = get_opcoes_cruzadas_completas(
+                op_nre_tt, op_mun_tt, op_dep_tt, op_loc_tt, op_cod_tt, op_nome_tt, _ = get_opcoes_cruzadas_completas(
                     df_tecnicos, nre_sel=cur_nre_tt, mun_sel=cur_mun_tt, dep_sel=cur_dep_tt, loc_sel=cur_loc_tt, cod_sel=cur_cod_tt, nome_sel=cur_nome_tt
                 )
 
@@ -1808,7 +1802,7 @@ with aba_tecnicos:
                 cur_cod_g2 = st.session_state.get("cod_tec_busca_g2", "Todos")
                 cur_nome_g2 = st.session_state.get("nome_tec_busca_g2", "Todas")
 
-                op_nre_g2, op_mun_g2, op_dep_g2, op_loc_g2, op_cod_g2, op_nome_g2 = get_opcoes_cruzadas_completas(
+                op_nre_g2, op_mun_g2, op_dep_g2, op_loc_g2, op_cod_g2, op_nome_g2, _ = get_opcoes_cruzadas_completas(
                     df_tecnicos, nre_sel=cur_nre_g2, mun_sel=cur_mun_g2, dep_sel=cur_dep_g2, loc_sel=cur_loc_g2, cod_sel=cur_cod_g2, nome_sel=cur_nome_g2
                 )
 
