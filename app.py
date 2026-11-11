@@ -193,8 +193,8 @@ MAP_MAT_PARA_TUR = {
 # =============================================================================
 
 GRUPOS_METRICAS_QT = [
-    "Etapa",
-    "Modalidade",
+    "Etapa Comum",
+    "Etapas: Profissional, EJA e Especial",
     "Sexo",
     "Raça/Cor",
     "Faixa Etária",
@@ -203,8 +203,8 @@ GRUPOS_METRICAS_QT = [
 ]
 
 CHAVES_GRUPOS_METRICAS_QT = {
-    "Etapa": "etapa",
-    "Modalidade": "modalidade",
+    "Etapa Comum": "etapa",
+    "Etapas: Profissional, EJA e Especial": "modalidade",
     "Sexo": "sexo",
     "Raça/Cor": "raca_cor",
     "Faixa Etária": "faixa_etaria",
@@ -216,37 +216,35 @@ CHAVES_GRUPOS_METRICAS_QT = {
 def categorias_metrica_qt(sufixo):
     import re
     s = str(sufixo).strip().upper()
+
+    # Mantém os grupos de características dos alunos
     if s in {"BAS_FEM", "BAS_MASC"}:
         return "Sexo"
+
     if s in {"BAS_BRANCA", "BAS_PRETA", "BAS_PARDA", "BAS_AMARELA", "BAS_INDIGENA", "BAS_ND"}:
         return "Raça/Cor"
+
     if re.search(r"(^|_)INT($|_)", s):
         return "Integral"
+
     if re.search(r"_(D|N|DM|DV)$", s):
         return "Turno"
+
     if re.search(r"(^|_)(0_3|4_5|6_10|11_14|15_17|18_MAIS)(_|$)", s):
         return "Faixa Etária"
-    if "DISC" in s.split("_") or s == "BAS_LIBRAS" or s.startswith("BAS_ZR_"):
-        return "Modalidade"
-    if s.startswith("MED_") and any(token in s.split("_") for token in {"PROP", "CT", "NM", "IFTP", "IFA"}):
-        return "Modalidade"
-    tokens = s.split("_")
-    primeiro = tokens[0] if tokens else ""
-    if primeiro in {"EJA", "ESP", "INF", "FUND"}:
-        return "Etapa"
-    if primeiro == "BAS" and len(tokens) == 1:
-        return "Etapa"
-    if primeiro == "MED":
-        if len(tokens) == 1:
-            return "Etapa"
-        if len(tokens) == 2 and tokens[1] in {"1", "2", "3", "4", "NS"}:
-            return "Etapa"
-    if re.match(r"^FUND_AI_(?:[1-5]|MULTIETAPA)$", s):
-        return "Etapa"
-    if re.match(r"^FUND_AF_(?:[6-9]|MULTI|CORRFLUXO)$", s):
-        return "Etapa"
-    return "Modalidade"
 
+    # Etapas: Profissional, EJA e Especial
+    if (
+        s in {"PROF", "EJA", "ESP"}
+        or s.startswith(("PROF_", "EJA_", "ESP_"))
+        or s.startswith("MED_IFTP_")
+        or s == "MED_IFTP"
+        or s.startswith("BAS_DISC_PROFISSIONA")
+    ):
+        return "Etapas: Profissional, EJA e Especial"
+
+    # Todas as demais etapas e modalidades comuns
+    return "Etapa Comum"
 def descricao_sufixo_qt(sufixo):
     coluna_mat = f"QT_MAT_{sufixo}"
     mapas = [OPCOES_ETAPAS, OPCOES_SEXO, OPCOES_RACA, OPCOES_IDADE, OPCOES_TURNO]
