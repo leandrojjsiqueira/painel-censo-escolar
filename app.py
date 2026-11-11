@@ -1427,7 +1427,7 @@ with aba_escolas:
                     st.session_state["_assinatura_export_escolas"] = assinatura_export
 
                 st.info(
-                    f"💡 Apresentar as primeiras 1000 escolas. "
+                    f"💡 Apresenta as primeiras 1000 escolas. "
                     f"O botão abaixo prepara o Excel com todos os {fmt_num(qtd_registros_escolas)} registros."
                 )
                 st.dataframe(df_escolas_exibir, use_container_width=True, height=500)
@@ -1983,7 +1983,7 @@ with aba_tecnicos:
             
             if not df_tecnicos_exibir.empty:
                 excel_tecnicos_bytes = converter_df_para_excel(df_tecnicos_exibir)
-                st.info(f"💡 Apresentar os primeiros 1000 cursos. O botão de download exporta todos os {fmt_num(len(df_tecnicos_exibir))} registros.")
+                st.info(f"💡 Apresenta os primeiros 1000 cursos. O botão de download exporta todos os {fmt_num(len(df_tecnicos_exibir))} registros.")
                 st.dataframe(df_tecnicos_exibir.head(1000), use_container_width=True, height=500)
                 st.download_button(
                     "📥 Baixar Cursos Excel (.xlsx)", 
