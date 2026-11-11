@@ -47,7 +47,7 @@ st.markdown("""
 # CAMINHOS E CARREGAMENTO DO DICIONÁRIO EXTERNO (ABA 4)
 # =============================================================================
 
-CAMINHO_DICIONARIO_PARQUET = r"C:\Ferramenta_Censo\dicionario_super_tabelas.parquet"
+CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
 @st.cache_data(show_spinner="A carregar dicionário de dados...")
 def carregar_dicionario_dados(caminho_parquet):
@@ -193,8 +193,8 @@ MAP_MAT_PARA_TUR = {
 # =============================================================================
 
 GRUPOS_METRICAS_QT = [
-    "Etapa",
-    "Modalidade",
+    "Etapa Comum",
+    "Etapas: Profissional, EJA e Especial",
     "Sexo",
     "Raça/Cor",
     "Faixa Etária",
@@ -203,8 +203,8 @@ GRUPOS_METRICAS_QT = [
 ]
 
 CHAVES_GRUPOS_METRICAS_QT = {
-    "Etapa": "etapa",
-    "Modalidade": "modalidade",
+    "Etapa Comum": "etapa",
+    "Etapas: Profissional, EJA e Especial": "modalidade",
     "Sexo": "sexo",
     "Raça/Cor": "raca_cor",
     "Faixa Etária": "faixa_etaria",
@@ -216,37 +216,35 @@ CHAVES_GRUPOS_METRICAS_QT = {
 def categorias_metrica_qt(sufixo):
     import re
     s = str(sufixo).strip().upper()
+
+    # Mantém os grupos de características dos alunos
     if s in {"BAS_FEM", "BAS_MASC"}:
         return "Sexo"
+
     if s in {"BAS_BRANCA", "BAS_PRETA", "BAS_PARDA", "BAS_AMARELA", "BAS_INDIGENA", "BAS_ND"}:
         return "Raça/Cor"
+
     if re.search(r"(^|_)INT($|_)", s):
         return "Integral"
+
     if re.search(r"_(D|N|DM|DV)$", s):
         return "Turno"
+
     if re.search(r"(^|_)(0_3|4_5|6_10|11_14|15_17|18_MAIS)(_|$)", s):
         return "Faixa Etária"
-    if "DISC" in s.split("_") or s == "BAS_LIBRAS" or s.startswith("BAS_ZR_"):
-        return "Modalidade"
-    if s.startswith("MED_") and any(token in s.split("_") for token in {"PROP", "CT", "NM", "IFTP", "IFA"}):
-        return "Modalidade"
-    tokens = s.split("_")
-    primeiro = tokens[0] if tokens else ""
-    if primeiro in {"EJA", "ESP", "INF", "FUND"}:
-        return "Etapa"
-    if primeiro == "BAS" and len(tokens) == 1:
-        return "Etapa"
-    if primeiro == "MED":
-        if len(tokens) == 1:
-            return "Etapa"
-        if len(tokens) == 2 and tokens[1] in {"1", "2", "3", "4", "NS"}:
-            return "Etapa"
-    if re.match(r"^FUND_AI_(?:[1-5]|MULTIETAPA)$", s):
-        return "Etapa"
-    if re.match(r"^FUND_AF_(?:[6-9]|MULTI|CORRFLUXO)$", s):
-        return "Etapa"
-    return "Modalidade"
 
+    # Etapas: Profissional, EJA e Especial
+    if (
+        s in {"PROF", "EJA", "ESP"}
+        or s.startswith(("PROF_", "EJA_", "ESP_"))
+        or s.startswith("MED_IFTP_")
+        or s == "MED_IFTP"
+        or s.startswith("BAS_DISC_PROFISSIONA")
+    ):
+        return "Etapas: Profissional, EJA e Especial"
+
+    # Todas as demais etapas e modalidades comuns
+    return "Etapa Comum"
 def descricao_sufixo_qt(sufixo):
     coluna_mat = f"QT_MAT_{sufixo}"
     mapas = [OPCOES_ETAPAS, OPCOES_SEXO, OPCOES_RACA, OPCOES_IDADE, OPCOES_TURNO]
@@ -650,44 +648,72 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # =============================================================================
-# CAMINHOS E CARREGAMENTO
+# CAMINHOS E CARREGAMENTO OTIMIZADOS (Evita estourar a RAM do Streamlit Cloud)
 # =============================================================================
 
-CAMINHO_ESCOLAS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v1_super_tabela_escolas.csv"
-CAMINHO_ESCOLAS_PARQUET = r"C:\Ferramenta_Censo\v1_super_tabela_escolas.parquet"
-CAMINHO_TECNICOS = r"M:\DPGE\04 - DPR\CIGD\0-2026\5 - ESTUDOS\45 - Microdados Censo Escolar 2007 a 2025\v2_super_tabela_cursos_tecnicos.csv"
+CAMINHO_ESCOLAS_PARQUET = "v1_super_tabela_escolas.parquet"
+CAMINHO_TECNICOS = "v2_super_tabela_cursos_tecnicos.parquet"
+CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
-@st.cache_data(show_spinner="A carregar a Super Tabela de Escolas...")
+@st.cache_data(show_spinner="A carregar metadados de escolas para os filtros...")
 def carregar_tabela_escolas(caminho_parquet, data_modificacao):
-    df = pd.read_parquet(caminho_parquet, engine="pyarrow")
-    df.columns = df.columns.str.strip().str.upper()
-    return df
-
-@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
-def carregar_tabela_tecnicos(caminho, data_modificacao):
+    # Carrega via DuckDB apenas as colunas de identificação e filtros, poupando muita RAM
     con = duckdb.connect()
     try:
-        df = con.execute(f"SELECT * FROM read_csv_auto('{caminho}', delim=';', encoding='latin-1', all_varchar=true, ignore_errors=true)").df()
-        df.columns = df.columns.str.strip().str.upper()
-    finally:
-        con.close()
-    return df
-
-@st.cache_data(show_spinner=False)
-def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
-    con = duckdb.connect()
-    try:
-        sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
-        if where_clause:
-            sql += f" WHERE {where_clause}"
+        sql = f"""
+            SELECT NU_ANO_CENSO, NO_REGIAO, SG_UF, CO_NRE, NO_NRE, 
+                   CO_MUNICIPIO, NO_MUNICIPIO, CO_ENTIDADE, NO_ENTIDADE, 
+                   TP_DEPENDENCIA, TP_LOCALIZACAO 
+            FROM read_parquet('{caminho_parquet}')
+        """
         df = con.execute(sql).df()
         df.columns = df.columns.str.strip().str.upper()
         return df
     finally:
         con.close()
 
+@st.cache_data(show_spinner="A carregar a Tabela de Cursos Técnicos...")
+def carregar_tabela_tecnicos(caminho, data_modificacao):
+    con = duckdb.connect()
+    try:
+        df = con.execute(f"SELECT * FROM read_parquet('{caminho}')").df()
+        df.columns = df.columns.str.strip().str.upper()
+    finally:
+        con.close()
+    return df
+
+@st.cache_data(show_spinner=False)
+def consultar_escolas_em_lotes(caminho_parquet, where_base_sem_ano, anos_selecionados, tamanho_lote=3):
+    if not anos_selecionados:
+        return pd.DataFrame()
+    
+    anos_int = sorted([int(a) for a in anos_selecionados])
+    lotes = [anos_int[i:i + tamanho_lote] for i in range(0, len(anos_int), tamanho_lote)]
+    
+    dfs_parciais = []
+    con = duckdb.connect()
+    try:
+        for lote in lotes:
+            anos_str = ", ".join(map(str, lote))
+            condicoes = list(where_base_sem_ano) if where_base_sem_ano else []
+            condicoes.append(f"TRY_CAST(SPLIT_PART(TRIM(CAST(NU_ANO_CENSO AS VARCHAR)), '.', 1) AS INTEGER) IN ({anos_str})")
+            
+            sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
+            if condicoes:
+                sql += " WHERE " + " AND ".join(condicoes)
+                
+            df_lote = con.execute(sql).df()
+            df_lote.columns = df_lote.columns.str.strip().str.upper()
+            dfs_parciais.append(df_lote)
+            
+        if dfs_parciais:
+            return pd.concat(dfs_parciais, ignore_index=True)
+        return pd.DataFrame()
+    finally:
+        con.close()
+
 if not os.path.exists(CAMINHO_ESCOLAS_PARQUET) or not os.path.exists(CAMINHO_TECNICOS):
-    st.error("ERRO: O arquivo Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
+    st.error("ERRO: O ficheiro Parquet das escolas ou o ficheiro de cursos técnicos não foi encontrado.")
     st.stop()
 
 DATA_MOD_ESCOLAS = os.path.getmtime(CAMINHO_ESCOLAS_PARQUET)
@@ -721,7 +747,7 @@ aba_escolas, aba_tecnicos, aba_obs, aba_dic = st.tabs([
 
 with aba_escolas:
     with st.expander("📶 **Painel de Filtros - Escolas**", expanded=True):
-        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a1", width="content"):
+        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a1"):
             for chave in [
                 "ano_esc_a1", "nre_esc_a1", "mun_esc_sel_a1", "dep_esc_a1", "loc_esc_a1",
                 "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
@@ -777,26 +803,25 @@ with aba_escolas:
         with c5:
             dep_esc = criar_filtro_checkboxes("Rede", op_dep_p1, "dep_esc_a1")
 
-    where_esc = []
-    if ano_esc:
-        where_esc.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_esc)})")
+    # Filtros sem o ano (o ano será fatiado em lotes de 3 automaticamente por trás dos panos)
+    where_esc_sem_ano = []
     if nre_esc and nre_esc not in ["Todas", "Todos"] and "NO_NRE" in df_escolas_raw.columns:
-        where_esc.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_esc.replace('\'', '\'\'')}'")
+        where_esc_sem_ano.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_esc.replace('\'', '\'\'')}'")
     if mun_esc and mun_esc != "Todas":
-        where_esc.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_esc.replace('\'', '\'\'')}'")
+        where_esc_sem_ano.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_esc.replace('\'', '\'\'')}'")
     if dep_esc:
         deps = [int(d.split(' - ')[0]) for d in dep_esc]
-        where_esc.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps))})")
+        where_esc_sem_ano.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps))})")
     if loc_esc and loc_esc not in ["Todas", "Todos"]:
         loc_id = int(loc_esc.split(' - ')[0])
-        where_esc.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
-
-    where_clause_escolas = " AND ".join(where_esc)
+        where_esc_sem_ano.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
 
     try:
-        df_escolas = consultar_escolas_filtradas_parquet(
-            CAMINHO_ESCOLAS_PARQUET,
-            where_clause_escolas
+        df_escolas = consultar_escolas_em_lotes(
+            CAMINHO_ESCOLAS_PARQUET, 
+            where_esc_sem_ano, 
+            anos_selecionados=ano_esc, 
+            tamanho_lote=3
         )
 
         rotulo_ano = formatar_anos(ano_esc)
@@ -1215,7 +1240,7 @@ with aba_escolas:
 
 with aba_tecnicos:
     with st.expander("📶 **Painel de Filtros - Cursos Técnicos**", expanded=True):
-        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3", width="content"):
+        if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3"):
             for chave in ["ano_tec", "nre_tec", "mun_tec_sel_a3", "dep_tec", "loc_tec", "cod_tec_sel_a3", "nome_tec_sel_a3", "nre_t_v2", "mun_t_v2", "dep_t_v2", "loc_t_v2", "cod_t_busca_v2", "nome_t_busca_v2", "sel_qtd_tec", "sel_mat_tec", "sel_area_inst", "sel_nome_curso_inst", "nre_g2", "mun_g2", "dep_g2", "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2", "sel_qtd_tec_graf", "sel_mat_tec_graf", "sel_area_graf", "sel_nome_curso_graf", "ms_tec_confirmado"]:
                 st.session_state.pop(chave, None)
                 for k in list(st.session_state.keys()):
@@ -1805,9 +1830,7 @@ with aba_obs:
 # =============================================================================
 # CAMINHO DO DICIONÁRIO PARQUET
 # =============================================================================
-CAMINHO_DICIONARIO_PARQUET = (
-    r"C:\Ferramenta_Censo\dicionario_super_tabelas.parquet"
-)
+CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
 
 @st.cache_data(show_spinner="A carregar dicionário de dados...")
@@ -1826,7 +1849,6 @@ def carregar_dicionario_dados(caminho_parquet):
     )
 
 
-
 # =============================================================================
 # ABA 4 - DICIONÁRIO DE DADOS (3 COLUNAS)
 # =============================================================================
@@ -1838,6 +1860,9 @@ with aba_dic:
         " dicionário e interpretações amigáveis do painel."
     )
     st.markdown("---")
+
+    # Caminho ajustado para o GitHub / Streamlit Cloud
+    CAMINHO_DICIONARIO_PARQUET = "dicionario_super_tabelas.parquet"
 
     df_dicionario = carregar_dicionario_dados(CAMINHO_DICIONARIO_PARQUET)
 
@@ -2028,15 +2053,14 @@ with aba_dic:
 
         st.markdown("---")
 
-
-
         # =====================================================================
         # SEÇÃO: BAIXAR DICIONÁRIO OFICIAL DO INEP POR ANO (EXCEL ORIGINAL)
         # =====================================================================
         st.markdown("##### ⏬ Baixar Dicionário Oficial do INEP por Ano")
         st.caption("Selecione o ano desejado para efetuar o download do arquivo Excel original INEP.")
 
-        PASTA_EXCEL_INEP = r"C:\Ferramenta_Censo\dicionarios_censo_escolar"
+        # Pasta dos dicionários ajustada para a estrutura do GitHub
+        PASTA_EXCEL_INEP = "dicionarios_censo_escolar"
         anos_disponiveis = list(range(2025, 2006, -1))
 
         col_ano, col_btn = st.columns([1, 2])
@@ -2049,11 +2073,11 @@ with aba_dic:
                 key="sb_ano_dicionario_inep"
             )
 
-        # Procura o arquivo .xlsx original na pasta local
+        # Procura o arquivo .xlsx original na pasta do repositório
         caminho_xlsx_inep = None
         if os.path.exists(PASTA_EXCEL_INEP):
             for arquivo in os.listdir(PASTA_EXCEL_INEP):
-                if f"dicionario_censo_{ano_selecionado}" in arquivo and arquivo.endswith(".xlsx") and not arquivo.startswith("~$"):
+                if str(ano_selecionado) in arquivo and arquivo.endswith(".xlsx") and not arquivo.startswith("~$"):
                     caminho_xlsx_inep = os.path.join(PASTA_EXCEL_INEP, arquivo)
                     break
 
