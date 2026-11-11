@@ -1433,7 +1433,7 @@ with aba_escolas:
                 st.dataframe(df_escolas_exibir, use_container_width=True, height=500)
 
                 if st.button("📄 Preparar arquivo Excel para download", key="btn_preparar_excel_escolas"):
-                    with st.spinner("Preparando o Excel para download"):
+                    with st.spinner("🔄 Preparando o Excel para download..."):
                         st.session_state["_excel_escolas_bytes"] = exportar_escolas_excel_lotes(
                             CAMINHO_ESCOLAS_PARQUET,
                             where_clause_filtros_escolas,
