@@ -682,7 +682,6 @@ def carregar_tabela_tecnicos(caminho, data_modificacao):
         con.close()
     return df
 
-@st.cache_data(show_spinner=False)
 def consultar_escolas_em_lotes(caminho_parquet, where_base_sem_ano, anos_selecionados, tamanho_lote=3):
     if not anos_selecionados:
         return pd.DataFrame()
