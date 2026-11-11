@@ -1387,7 +1387,7 @@ with aba_escolas:
                 cols_obrigatorias_esc = [
                     'NU_ANO_CENSO', 'NO_REGIAO', 'SG_UF', 'CO_NRE', 'NO_NRE',
                     'CO_MUNICIPIO', 'NO_MUNICIPIO', 'CO_ENTIDADE', 'NO_ENTIDADE',
-                    'TP_DEPENDENCIA', 'TP_LOCALIZACAO', 'QT_MAT_BAS', 'QT_TUR_BAS'
+                    'TP_DEPENDENCIA', 'TP_LOCALIZACAO', 'IN_REGULAR', 'QT_MAT_BAS', 'QT_TUR_BAS'
                 ]
                 cols_opcionais_disponiveis = [c for c in todas_cols_esc if c not in cols_obrigatorias_esc]
 
