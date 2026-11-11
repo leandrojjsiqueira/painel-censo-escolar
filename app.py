@@ -683,32 +683,15 @@ def carregar_tabela_tecnicos(caminho, data_modificacao):
     return df
 
 @st.cache_data(show_spinner=False)
-def consultar_escolas_em_lotes(caminho_parquet, where_base_sem_ano, anos_selecionados, tamanho_lote=3):
-    if not anos_selecionados:
-        return pd.DataFrame()
-    
-    anos_int = sorted([int(a) for a in anos_selecionados])
-    lotes = [anos_int[i:i + tamanho_lote] for i in range(0, len(anos_int), tamanho_lote)]
-    
-    dfs_parciais = []
+def consultar_escolas_filtradas_parquet(caminho_parquet, where_clause):
     con = duckdb.connect()
     try:
-        for lote in lotes:
-            anos_str = ", ".join(map(str, lote))
-            condicoes = list(where_base_sem_ano) if where_base_sem_ano else []
-            condicoes.append(f"TRY_CAST(SPLIT_PART(TRIM(CAST(NU_ANO_CENSO AS VARCHAR)), '.', 1) AS INTEGER) IN ({anos_str})")
-            
-            sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
-            if condicoes:
-                sql += " WHERE " + " AND ".join(condicoes)
-                
-            df_lote = con.execute(sql).df()
-            df_lote.columns = df_lote.columns.str.strip().str.upper()
-            dfs_parciais.append(df_lote)
-            
-        if dfs_parciais:
-            return pd.concat(dfs_parciais, ignore_index=True)
-        return pd.DataFrame()
+        sql = f"SELECT * FROM read_parquet('{caminho_parquet}')"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        df = con.execute(sql).df()
+        df.columns = df.columns.str.strip().str.upper()
+        return df
     finally:
         con.close()
 
@@ -803,25 +786,26 @@ with aba_escolas:
         with c5:
             dep_esc = criar_filtro_checkboxes("Rede", op_dep_p1, "dep_esc_a1")
 
-    # Filtros sem o ano (o ano será fatiado em lotes de 3 automaticamente por trás dos panos)
-    where_esc_sem_ano = []
+    where_esc = []
+    if ano_esc:
+        where_esc.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_esc)})")
     if nre_esc and nre_esc not in ["Todas", "Todos"] and "NO_NRE" in df_escolas_raw.columns:
-        where_esc_sem_ano.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_esc.replace('\'', '\'\'')}'")
+        where_esc.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_esc.replace('\'', '\'\'')}'")
     if mun_esc and mun_esc != "Todas":
-        where_esc_sem_ano.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_esc.replace('\'', '\'\'')}'")
+        where_esc.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_esc.replace('\'', '\'\'')}'")
     if dep_esc:
         deps = [int(d.split(' - ')[0]) for d in dep_esc]
-        where_esc_sem_ano.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps))})")
+        where_esc.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps))})")
     if loc_esc and loc_esc not in ["Todas", "Todos"]:
         loc_id = int(loc_esc.split(' - ')[0])
-        where_esc_sem_ano.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
+        where_esc.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
+
+    where_clause_escolas = " AND ".join(where_esc)
 
     try:
-        df_escolas = consultar_escolas_em_lotes(
-            CAMINHO_ESCOLAS_PARQUET, 
-            where_esc_sem_ano, 
-            anos_selecionados=ano_esc, 
-            tamanho_lote=3
+        df_escolas = consultar_escolas_filtradas_parquet(
+            CAMINHO_ESCOLAS_PARQUET,
+            where_clause_escolas
         )
 
         rotulo_ano = formatar_anos(ano_esc)
