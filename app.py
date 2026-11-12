@@ -1015,9 +1015,9 @@ with aba_escolas:
         m2.metric("Ano(s) do Censo", rotulo_ano)
 
         # ---------------------------------------------------------------------
-        # 1º Bloco: 🔎 Seleção de Visualização Instantânea das Tabelas
+        # 1º Bloco: 🔎 Seleção de Visualização Instantânea dos Totais de Matrículas e Turmas
         # ---------------------------------------------------------------------
-        with st.expander("🔎 **Seleção de Visualização Instantânea das Tabelas**", expanded=False):
+        with st.expander("🔎 **Seleção de Visualização Instantânea dos Totais de Matrículas e Turmas**", expanded=False):
             @st.fragment
             def mostrar_tabelas_por_ano_fragmento():
                 st.markdown("##### Localização e Identificação da Escola")
@@ -1207,9 +1207,9 @@ with aba_escolas:
             mostrar_tabelas_por_ano_fragmento()
 
         # ---------------------------------------------------------------------
-        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos
+        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas
         # ---------------------------------------------------------------------
-        with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos**", expanded=False):
+        with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas**", expanded=False):
             @st.fragment
             def mostrar_graficos_escolas_fragmento():
                 st.markdown("### 📈 Evolução Histórica (Escolas)")
@@ -1543,9 +1543,9 @@ with aba_tecnicos:
         k3.metric("Ano(s) Selecionado(s)", rotulo_ano_tec)
 
         # ---------------------------------------------------------------------
-        # 1º Bloco Aba 2: 🔎 Seleção de Visualização Instantânea das Tabelas
+        # 1º Bloco Aba 2: 🔎 Seleção de Visualização Instantânea dos Totais de Matrículas e Cursos
         # ---------------------------------------------------------------------
-        with st.expander("🔎 **Seleção de Visualização Instantânea das Tabelas**", expanded=False):
+        with st.expander("🔎 **Seleção de Visualização Instantânea dos Totais de Matrículas e Cursos**", expanded=False):
             @st.fragment
             def mostrar_tabelas_tecnicos_por_ano_fragmento():
                 st.markdown("##### Localização e Identificação da Escola")
@@ -1778,9 +1778,9 @@ with aba_tecnicos:
             mostrar_tabelas_tecnicos_por_ano_fragmento()
 
         # ---------------------------------------------------------------------
-        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos (Aba 2)
+        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Cursos (Aba 2)
         # ---------------------------------------------------------------------
-        with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos**", expanded=False):
+        with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Cursos**", expanded=False):
             @st.fragment
             def mostrar_graficos_tecnicos_fragmento():
                 st.markdown("### 📈 Evolução Histórica (Cursos Técnicos)")
