@@ -551,9 +551,9 @@ def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=Non
             df = df[df["CO_ENTIDADE"].astype(str).str.split(".").str[0].str.strip() == cod_ativo]
         if exceto != "nome" and nome_ativo is not None and "NO_ENTIDADE" in df.columns:
             df = df[df["NO_ENTIDADE"].astype(str).str.strip() == nome_ativo]
-        if exceto != "regular" and regular_ativo is not None and "IN_REGULAR" in df.columns:
+        if exceto != "regular" and regular_ativo is not None and "IN_PODER_PUBLICO_PARCERIA" in df.columns:
             reg_id = regular_ativo.split(" - ")[0].strip()
-            df = df[df["IN_REGULAR"].astype(str).str.split(".").str[0].str.strip() == reg_id]
+            df = df[df["IN_PODER_PUBLICO_PARCERIA"].astype(str).str.split(".").str[0].str.strip() == reg_id]
         return df
 
     df_nre = aplicar_filtros("nre")
@@ -646,7 +646,7 @@ def carregar_tabela_escolas(caminho_parquet, data_modificacao):
         sql = f"""
             SELECT NU_ANO_CENSO, NO_REGIAO, SG_UF, CO_NRE, NO_NRE, 
                    CO_MUNICIPIO, NO_MUNICIPIO, CO_ENTIDADE, NO_ENTIDADE, 
-                   TP_DEPENDENCIA, TP_LOCALIZACAO, IN_REGULAR 
+                   TP_DEPENDENCIA, TP_LOCALIZACAO, IN_PODER_PUBLICO_PARCERIA 
             FROM read_parquet('{caminho_parquet}')
         """
         df = con.execute(sql).df()
@@ -697,7 +697,7 @@ def obter_colunas_parquet(caminho_parquet):
         con.close()
 
 def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
-                         dependencias=None, localizacao=None, codigo=None, nome=None):
+                         dependencias=None, localizacao=None, codigo=None, nome=None, poder_publico=None):
     condicoes = []
     if where_base:
         condicoes.append(f"({where_base})")
@@ -733,6 +733,10 @@ def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
     if nome and nome not in ["Todas", "Todos"]:
         valor = str(nome).replace("'", "''")
         condicoes.append(f"TRIM(CAST(NO_ENTIDADE AS VARCHAR)) = '{valor}'")
+
+    if poder_publico and poder_publico not in ["Todas", "Todos"]:
+        pod_id = int(str(poder_publico).split(" - ")[0])
+        condicoes.append(f"{sql_int_safe('IN_PODER_PUBLICO_PARCERIA')} = {pod_id}")
 
     return " AND ".join(condicoes)
 
@@ -903,7 +907,7 @@ with aba_escolas:
         if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a1"):
             for chave in [
                 "ano_esc_a1", "nre_esc_a1", "mun_esc_sel_a1", "dep_esc_a1", "loc_esc_a1",
-                "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "reg_t_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
+                "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "reg_t_v1", "poder_g_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
                 "nre_g1", "mun_g1", "dep_g1", "loc_g1", "cod_esc_busca_g1", "nome_esc_busca_g1", "sel_etapa_a2", "sel_sexo_a2", "sel_raca_a2", "sel_idade_a2", "sel_turno_a2",
                 "ms_esc_confirmado"
             ]:
@@ -1042,7 +1046,7 @@ with aba_escolas:
                 with t_fc5: 
                     nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas")
                 with t_fc6: 
-                    reg_t_sel = criar_filtro_selectbox("Regular", op_reg_t1, "reg_t_v1", "Todas")
+                    reg_t_sel = criar_filtro_selectbox("P. Público Parceria", op_reg_t1, "reg_t_v1", "Todas")
                 with t_fc7: 
                     dep_t_sel = criar_filtro_checkboxes("Rede", op_dep_t1, "dep_t_v1")
 
@@ -1094,11 +1098,9 @@ with aba_escolas:
                         dependencias=dep_t_sel,
                         localizacao=loc_t_sel,
                         codigo=cod_t_sel,
-                        nome=nome_t_sel
+                        nome=nome_t_sel,
+                        poder_publico=reg_t_sel
                     )
-                    if reg_t_sel and reg_t_sel not in ["Todas", "Todos"]:
-                        reg_id = reg_t_sel.split(" - ")[0].strip()
-                        where_tabela += f" AND {sql_int_safe('IN_REGULAR')} = {reg_id}"
 
                     colunas_para_somar = []
                     for _titulo, (selecionados, opcoes) in grupos_metricas_a1.items():
@@ -1235,12 +1237,13 @@ with aba_escolas:
                 cur_loc_g1 = st.session_state.get("loc_g1", "Todas")
                 cur_cod_g1 = st.session_state.get("cod_esc_sel_g1", "Todos")
                 cur_nome_g1 = st.session_state.get("nome_esc_sel_g1", "Todas")
+                cur_reg_g1 = st.session_state.get("poder_g_v1", "Todas")
 
-                op_nre_g1, op_mun_g1, op_dep_g1, op_loc_g1, op_cod_g1, op_nome_g1, _ = get_opcoes_cruzadas_completas(
-                    df_escolas_meta, nre_sel=cur_nre_g1, mun_sel=cur_mun_g1, dep_sel=cur_dep_g1, loc_sel=cur_loc_g1, cod_sel=cur_cod_g1, nome_sel=cur_nome_g1
+                op_nre_g1, op_mun_g1, op_dep_g1, op_loc_g1, op_cod_g1, op_nome_g1, op_reg_g1 = get_opcoes_cruzadas_completas(
+                    df_escolas_meta, nre_sel=cur_nre_g1, mun_sel=cur_mun_g1, dep_sel=cur_dep_g1, loc_sel=cur_loc_g1, cod_sel=cur_cod_g1, nome_sel=cur_nome_g1, regular_sel=cur_reg_g1
                 )
 
-                g_c1, g_c2, g_c3, g_c4, g_c5, g_c6 = st.columns(6)
+                g_c1, g_c2, g_c3, g_c4, g_c5, g_c6, g_c7 = st.columns(7)
                 with g_c1: 
                     nre_esc_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g1, "nre_g1", "Todas")
                 with g_c2: 
@@ -1252,6 +1255,8 @@ with aba_escolas:
                 with g_c5: 
                     nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
                 with g_c6: 
+                    reg_g_sel = criar_filtro_selectbox("P. Público Parceria", op_reg_g1, "poder_g_v1", "Todas")
+                with g_c7: 
                     dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
 
                 st.markdown("##### Métrica Específica para o Gráfico")
@@ -1288,7 +1293,8 @@ with aba_escolas:
                         dependencias=dep_esc_graf,
                         localizacao=loc_esc_graf,
                         codigo=cod_esc_sel_g,
-                        nome=nome_esc_sel_g
+                        nome=nome_esc_sel_g,
+                        poder_publico=reg_g_sel
                     )
 
                     for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_a2.items():
@@ -1376,12 +1382,12 @@ with aba_escolas:
         @st.fragment
         def fragmento_tabela_escolas():
             with st.expander("⚙️ **Personalizar Colunas Adicionais do Relatório**", expanded=False):
-                st.caption("🔒 As colunas de identificação, localização, NRE, rede, regularidade e código do município são fixadas automaticamente.")
+                st.caption("🔒 As colunas de identificação, localização, NRE, rede, parceria com o poder público e código do município são fixadas automaticamente.")
                 todas_cols_esc = list(colunas_escolas)
                 cols_obrigatorias_esc = [
                     'NU_ANO_CENSO', 'NO_REGIAO', 'SG_UF', 'CO_NRE', 'NO_NRE',
                     'CO_MUNICIPIO', 'NO_MUNICIPIO', 'CO_ENTIDADE', 'NO_ENTIDADE',
-                    'TP_DEPENDENCIA', 'TP_LOCALIZACAO', 'IN_REGULAR', 'QT_MAT_BAS', 'QT_TUR_BAS'
+                    'TP_DEPENDENCIA', 'TP_LOCALIZACAO', 'IN_PODER_PUBLICO_PARCERIA', 'QT_MAT_BAS', 'QT_TUR_BAS'
                 ]
                 cols_opcionais_disponiveis = [c for c in todas_cols_esc if c not in cols_obrigatorias_esc]
 
@@ -1816,7 +1822,7 @@ with aba_tecnicos:
                 with g_t4: 
                     cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
                 with g_t5: 
-                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas")
+                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todos")
                 with g_t6: 
                     dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
 
