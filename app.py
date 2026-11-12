@@ -1046,7 +1046,7 @@ with aba_escolas:
                 with t_fc5: 
                     nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas")
                 with t_fc6: 
-                    reg_t_sel = criar_filtro_selectbox("P. Público Parceria", op_reg_t1, "reg_t_v1", "Todas")
+                    reg_t_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_t1, "reg_t_v1", "Todas")
                 with t_fc7: 
                     dep_t_sel = criar_filtro_checkboxes("Rede", op_dep_t1, "dep_t_v1")
 
@@ -1255,7 +1255,7 @@ with aba_escolas:
                 with g_c5: 
                     nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
                 with g_c6: 
-                    reg_g_sel = criar_filtro_selectbox("P. Público Parceria", op_reg_g1, "poder_g_v1", "Todas")
+                    reg_g_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_g1, "poder_g_v1", "Todas")
                 with g_c7: 
                     dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
 
