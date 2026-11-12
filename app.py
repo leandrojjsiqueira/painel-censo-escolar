@@ -1046,7 +1046,7 @@ with aba_escolas:
                 with t_fc5: 
                     nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas")
                 with t_fc6: 
-                    reg_t_sel = criar_filtro_selectbox("Escolas parceiras", op_reg_t1, "reg_t_v1", "Todas")
+                    reg_t_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_t1, "reg_t_v1", "Todas")
                 with t_fc7: 
                     dep_t_sel = criar_filtro_checkboxes("Rede", op_dep_t1, "dep_t_v1")
 
@@ -1255,7 +1255,7 @@ with aba_escolas:
                 with g_c5: 
                     nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
                 with g_c6: 
-                    reg_g_sel = criar_filtro_selectbox("Escolas parceiras", op_reg_g1, "poder_g_v1", "Todas")
+                    reg_g_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_g1, "poder_g_v1", "Todas")
                 with g_c7: 
                     dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
 
@@ -1382,7 +1382,7 @@ with aba_escolas:
         @st.fragment
         def fragmento_tabela_escolas():
             with st.expander("⚙️ **Personalizar Colunas Adicionais do Relatório**", expanded=False):
-                st.caption("🔒 As colunas de identificação, localização, NRE, rede, escolas parceiras e código do município são fixadas automaticamente.")
+                st.caption("🔒 As colunas de identificação, localização, NRE, rede, parceria com o poder público e código do município são fixadas automaticamente.")
                 todas_cols_esc = list(colunas_escolas)
                 cols_obrigatorias_esc = [
                     'NU_ANO_CENSO', 'NO_REGIAO', 'SG_UF', 'CO_NRE', 'NO_NRE',
@@ -1391,48 +1391,14 @@ with aba_escolas:
                 ]
                 cols_opcionais_disponiveis = [c for c in todas_cols_esc if c not in cols_obrigatorias_esc]
 
-                # Mapeamento com o dicionário de dados
-                df_dic_map = carregar_dicionario_dados(CAMINHO_DICIONARIO_PARQUET)
-                mapa_col_desc = {}
-                if not df_dic_map.empty and "Coluna Original" in df_dic_map.columns:
-                    col_desc_cand = [c for c in df_dic_map.columns if c != "Coluna Original"]
-                    col_desc = col_desc_cand[0] if col_desc_cand else None
-                    for _, r in df_dic_map.iterrows():
-                        orig = str(r["Coluna Original"]).strip().upper()
-                        desc = str(r[col_desc]).strip() if col_desc else ""
-                        if orig and desc and desc != "nan":
-                            mapa_col_desc[orig] = desc
-
-                opcoes_formatadas_esc = {}
-                for col in cols_opcionais_disponiveis:
-                    col_up = str(col).strip().upper()
-                    desc = mapa_col_desc.get(col_up, "")
-                    if desc:
-                        label = f"{col} — {desc}"
-                    else:
-                        label = col
-                    opcoes_formatadas_esc[label] = col
-
-                rotulos_opcoes_esc = list(opcoes_formatadas_esc.keys())
-                default_salvo_esc = st.session_state.get("ms_esc_confirmado", [])
-                defaults_formatados_esc = []
-                for d in default_salvo_esc:
-                    if d in opcoes_formatadas_esc.values():
-                        k = [k for k, v in opcoes_formatadas_esc.items() if v == d]
-                        if k:
-                            defaults_formatados_esc.append(k[0])
-                    elif d in opcoes_formatadas_esc:
-                        defaults_formatados_esc.append(d)
-
                 with st.form("form_cols_esc"):
-                    selecionados_formatados_esc = st.multiselect(
+                    cols_extras_rascunho = st.multiselect(
                         "Marque colunas extras:",
-                        options=rotulos_opcoes_esc,
-                        default=defaults_formatados_esc
+                        options=cols_opcionais_disponiveis,
+                        default=st.session_state.get("ms_esc_confirmado", [])
                     )
                     btn_inserir_esc = st.form_submit_button("✔️ Inserir Colunas")
                     if btn_inserir_esc:
-                        cols_extras_rascunho = [opcoes_formatadas_esc[r] for r in selecionados_formatados_esc if r in opcoes_formatadas_esc]
                         st.session_state["ms_esc_confirmado"] = cols_extras_rascunho
 
             cols_extras_sel = st.session_state.get("ms_esc_confirmado", [])
@@ -1856,7 +1822,7 @@ with aba_tecnicos:
                 with g_t4: 
                     cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
                 with g_t5: 
-                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas")
+                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todos")
                 with g_t6: 
                     dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
 
@@ -1999,48 +1965,14 @@ with aba_tecnicos:
                 ]
                 cols_opcionais_disponiveis_tec = [c for c in todas_cols_tec if c not in cols_obrigatorias_tec]
 
-                # Mapeamento com o dicionário de dados
-                df_dic_map_tec = carregar_dicionario_dados(CAMINHO_DICIONARIO_PARQUET)
-                mapa_col_desc_tec = {}
-                if not df_dic_map_tec.empty and "Coluna Original" in df_dic_map_tec.columns:
-                    col_desc_cand = [c for c in df_dic_map_tec.columns if c != "Coluna Original"]
-                    col_desc = col_desc_cand[0] if col_desc_cand else None
-                    for _, r in df_dic_map_tec.iterrows():
-                        orig = str(r["Coluna Original"]).strip().upper()
-                        desc = str(r[col_desc]).strip() if col_desc else ""
-                        if orig and desc and desc != "nan":
-                            mapa_col_desc_tec[orig] = desc
-
-                opcoes_formatadas_tec = {}
-                for col in cols_opcionais_disponiveis_tec:
-                    col_up = str(col).strip().upper()
-                    desc = mapa_col_desc_tec.get(col_up, "")
-                    if desc:
-                        label = f"{col} — {desc}"
-                    else:
-                        label = col
-                    opcoes_formatadas_tec[label] = col
-
-                rotulos_opcoes_tec = list(opcoes_formatadas_tec.keys())
-                default_salvo_tec = st.session_state.get("ms_tec_confirmado", [])
-                defaults_formatados_tec = []
-                for d in default_salvo_tec:
-                    if d in opcoes_formatadas_tec.values():
-                        k = [k for k, v in opcoes_formatadas_tec.items() if v == d]
-                        if k:
-                            defaults_formatados_tec.append(k[0])
-                    elif d in opcoes_formatadas_tec:
-                        defaults_formatados_tec.append(d)
-
                 with st.form("form_cols_tec"):
-                    selecionados_formatados_tec = st.multiselect(
+                    cols_extras_rascunho_tec = st.multiselect(
                         "Marque colunas extras:", 
-                        options=rotulos_opcoes_tec, 
-                        default=defaults_formatados_tec
+                        options=cols_opcionais_disponiveis_tec, 
+                        default=st.session_state.get("ms_tec_confirmado", [])
                     )
                     btn_inserir_tec = st.form_submit_button("✔️ Inserir Colunas")
                     if btn_inserir_tec:
-                        cols_extras_rascunho_tec = [opcoes_formatadas_tec[r] for r in selecionados_formatados_tec if r in opcoes_formatadas_tec]
                         st.session_state["ms_tec_confirmado"] = cols_extras_rascunho_tec
 
             cols_extras_sel_tec = st.session_state.get("ms_tec_confirmado", [])
@@ -2079,7 +2011,7 @@ with aba_obs:
     with st.container(border=True):
         st.markdown("### 1. Ausência de Cruzamento Multidimensional Agregado")
         st.write("Os microdados da **Super Tabela de Escolas** disponibilizados pelo INEP refletem agregações por instituição. Portanto, **não é possível realizar cruzamentos multidimensionais diretos** entre variáveis categóricas distintas.")
-        st.info("**Exemplo Prático:** É possível visualizar a quantidade total de alunos pretos/pardos na escola e a quantidade total de alunos no turno noturno. No entanto, **não é possibile identificar quantos alunos pretos/pardos estudam especificamente no turno noturno**, pois tais variáveis são contabilizadas de forma independente na declaração da escola.")
+        st.info("**Exemplo Prático:** É possível visualizar a quantidade total de alunos pretos/pardos na escola e a quantidade total de alunos no turno noturno. No entanto, **não é possível identificar quantos alunos pretos/pardos estudam especificamente no turno noturno**, pois tais variáveis são contabilizadas de forma independente na declaração da escola.")
     
     with st.container(border=True):
         st.markdown("### 2. Disponibilidade de Variáveis por Ano (Evolução Temporal)")
