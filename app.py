@@ -1961,7 +1961,7 @@ with aba_tecnicos:
                     'NU_ANO_CENSO', 'NO_REGIAO', 'SG_UF', 'CO_NRE', 'NO_NRE',
                     'CO_MUNICIPIO', 'NO_MUNICIPIO', 'CO_ENTIDADE', 'NO_ENTIDADE',
                     'TP_DEPENDENCIA', 'TP_LOCALIZACAO', 'CO_CURSO_EDUC_PROFISSIONAL',
-                    'NO_CURSO_EDUC_PROFISSIONAL', 'NO_AREA_CURSO_PROFISSIONAL'
+                    'NO_CURSO_EDUC_PROFISSIONAL', 'NO_AREA_CURSO_PROFISSIONAL', 'QT_MAT_CURSO_TEC', 'QT_CURSO_TEC'
                 ]
                 cols_opcionais_disponiveis_tec = [c for c in todas_cols_tec if c not in cols_obrigatorias_tec]
 
