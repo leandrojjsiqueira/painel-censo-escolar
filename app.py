@@ -1212,6 +1212,9 @@ with aba_escolas:
         # ---------------------------------------------------------------------
         # 2º Bloco: GRÁFICOS DA ABA 1
         # ---------------------------------------------------------------------
+        # ---------------------------------------------------------------------
+        # 2º Bloco: GRÁFICOS DA ABA 1
+        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas**", expanded=False):
             @st.fragment
             def mostrar_graficos_escolas_fragmento():
@@ -1317,19 +1320,60 @@ with aba_escolas:
                         if not (colunas_mat_grupo or colunas_turma_grupo) or not anos_grafico:
                             continue
 
-                        df_agrupado = consultar_evolucao_metricas_lotes(
-                            CAMINHO_ESCOLAS_PARQUET,
-                            where_grafico,
-                            anos_grafico,
-                            colunas_mat_grupo,
-                            colunas_turma_grupo,
-                            tamanho_lote=3
-                        )
+                        # Consulta em lotes para buscar os valores desagregados por ano e métrica
+                        expressoes = [
+                            f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
+                            for col in list(dict.fromkeys(colunas_mat_grupo + colunas_turma_grupo))
+                        ]
+                        
+                        registros_agrupados = []
+                        con = duckdb.connect()
+                        try:
+                            for lote_anos in quebrar_anos_em_lotes(anos_grafico, 3):
+                                where_lote = montar_where_escolas(where_grafico, anos=lote_anos)
+                                sql = f"""
+                                    SELECT {sql_int_safe('NU_ANO_CENSO')} AS ANO,
+                                           {', '.join(expressoes)}
+                                    FROM read_parquet('{CAMINHO_ESCOLAS_PARQUET}')
+                                    WHERE {where_lote}
+                                    GROUP BY ANO
+                                    ORDER BY ANO
+                                """
+                                res_lote = con.execute(sql).df()
+                                for _, linha in res_lote.iterrows():
+                                    ano_val = int(linha["ANO"])
+                                    for c_mat in colunas_mat_grupo:
+                                        if c_mat in linha:
+                                            registros_agrupados.append({
+                                                'ANO': ano_val,
+                                                'Metrica': c_mat,
+                                                'Valor': float(linha[c_mat] or 0)
+                                            })
+                                    for c_tur in colunas_turma_grupo:
+                                        if c_tur in linha:
+                                            registros_agrupados.append({
+                                                'ANO': ano_val,
+                                                'Metrica': c_tur,
+                                                'Valor': float(linha[c_tur] or 0)
+                                            })
+                        finally:
+                            con.close()
+
+                        df_agrupado = pd.DataFrame(registros_agrupados)
                         if df_agrupado.empty:
                             continue
 
-                        df_agrupado['Matrículas_Fmt'] = df_agrupado['Matrículas'].apply(lambda x: f"{int(x):,}".replace(",", "."))
-                        df_agrupado['Turmas_Fmt'] = df_agrupado['Turmas'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                        mapa_nomes_amigaveis = {f"QT_MAT_{s}": rotulo.split(" (")[0] for s, rotulo in opcoes_grupo.items()}
+                        mapa_nomes_amigaveis.update({f"QT_TUR_{s}": f"{rotulo.split(' (')[0]} (Turmas)" for s, rotulo in opcoes_grupo.items()})
+
+                        df_agrupado['Metrica_Nome'] = df_agrupado['Metrica'].map(mapa_nomes_amigaveis).fillna(df_agrupado['Metrica'])
+                        df_agrupado['Valor_Fmt'] = df_agrupado['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+
+                        cols_melt_mat = [c for c in colunas_mat_grupo if c in df_agrupado['Metrica'].values]
+                        cols_melt_tur = [c for c in colunas_turma_grupo if c in df_agrupado['Metrica'].values]
+
+                        df_mat = df_agrupado[df_agrupado['Metrica'].isin(cols_melt_mat)] if cols_melt_mat else pd.DataFrame()
+                        df_tur = df_agrupado[df_agrupado['Metrica'].isin(cols_melt_tur)] if cols_melt_tur else pd.DataFrame()
 
                         st.markdown(f"### {titulo_grupo}")
                         
@@ -1344,33 +1388,33 @@ with aba_escolas:
                         )
                         st.caption(subtitulo_dinamico)
 
-                        fig_mat = px.line(df_agrupado, x='ANO', y='Matrículas', markers=True, custom_data=['Matrículas_Fmt'])
-                        fig_mat.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Matrículas:</b> %{customdata[0]}<extra></extra>")
-                        fig_mat.update_layout(separators=',.', hovermode="closest", title="Matrículas", xaxis_title="Ano do Censo", yaxis_title="Total de Matrículas")
-                        fig_mat.update_xaxes(type='category', fixedrange=True)
-                        min_mat, max_mat = df_agrupado['Matrículas'].min(), df_agrupado['Matrículas'].max()
-                        fig_mat.update_yaxes(tickformat=',.0f', range=[min_mat * 0.95, max_mat * 1.05] if max_mat > 0 else None, fixedrange=True)
+                        fig_mat, fig_tur = None, None
 
-                        fig_tur = px.line(df_agrupado, x='ANO', y='Turmas', markers=True, custom_data=['Turmas_Fmt'])
-                        fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Turmas:</b> %{customdata[0]}<extra></extra>")
-                        fig_tur.update_layout(separators=',.', hovermode="closest", title="Turmas", xaxis_title="Ano do Censo", yaxis_title="Total de Turmas")
-                        fig_tur.update_xaxes(type='category', fixedrange=True)
-                        min_tur, max_tur = df_agrupado['Turmas'].min(), df_agrupado['Turmas'].max()
-                        fig_tur.update_yaxes(tickformat=',.0f', range=[min_tur * 0.95, max_tur * 1.05] if max_tur > 0 else None, fixedrange=True)
+                        if not df_mat.empty:
+                            fig_mat = px.line(df_mat, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
+                            fig_mat.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
+                            fig_mat.update_layout(separators=',.', hovermode="closest", title="Matrículas", xaxis_title="Ano do Censo", yaxis_title="Total de Matrículas")
+                            fig_mat.update_xaxes(type='category', fixedrange=True)
+                            fig_mat.update_yaxes(tickformat=',.0f', fixedrange=True)
 
-                        tem_matriculas = bool(colunas_mat_grupo)
-                        tem_turmas = bool(colunas_turma_grupo)
+                        if not df_tur.empty:
+                            fig_tur = px.line(df_tur, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
+                            fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
+                            fig_tur.update_layout(separators=',.', hovermode="closest", title="Turmas", xaxis_title="Ano do Censo", yaxis_title="Total de Turmas")
+                            fig_tur.update_xaxes(type='category', fixedrange=True)
+                            fig_tur.update_yaxes(tickformat=',.0f', fixedrange=True)
+
                         safe_key_suffix = CHAVES_GRUPOS_METRICAS_QT.get(titulo_grupo, titulo_grupo.lower().replace("/", "_").replace(" ", "_"))
 
-                        if tem_matriculas and tem_turmas:
+                        if fig_mat and fig_tur:
                             g1, g2 = st.columns(2)
                             with g1:
                                 st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key_suffix}")
                             with g2:
                                 st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key_suffix}")
-                        elif tem_matriculas:
+                        elif fig_mat:
                             st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key_suffix}")
-                        elif tem_turmas:
+                        elif fig_tur:
                             st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key_suffix}")
 
                         st.markdown("---")
