@@ -1207,9 +1207,7 @@ with aba_escolas:
             mostrar_tabelas_por_ano_fragmento()
 
         # ---------------------------------------------------------------------
-        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas
-        # ---------------------------------------------------------------------
-        # 2º Bloco: GRÁFICOS DA ABA 1
+        # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas ABA 1
         # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas**", expanded=False):
             @st.fragment
@@ -1223,7 +1221,7 @@ with aba_escolas:
 
                 if min_ano_sld == max_ano_sld:
                     anos_selecionados = (min_ano_sld, max_ano_sld)
-                    st.info(f"ℹ️ Período fixado em **{min_ano_sld}**.")
+                    st.info(f"ℹ️ Período fixado em **{min_ano_sld}** conforme selecionado no filtro principal.")
                 else:
                     anos_selecionados = st.slider(
                         "Selecione o Período Histórico",
@@ -1389,18 +1387,38 @@ with aba_escolas:
                         fig_mat, fig_tur = None, None
 
                         if not df_mat.empty:
+                            raw_min_mat, raw_max_mat = df_mat['Valor'].min(), df_mat['Valor'].max()
+                            if raw_max_mat == raw_min_mat:
+                                raw_max_mat = raw_min_mat + 10.0
+                            
+                            span_mat = raw_max_mat - raw_min_mat
+                            step_mat = span_mat / 8.0 if span_mat > 0 else 1.0
+                            min_v_mat = max(0.0, raw_min_mat - step_mat) # Trava o mínimo em 0 no mínimo
+                            max_v_mat = raw_max_mat + step_mat
+                            dtick_mat = (max_v_mat - min_v_mat) / 10.0
+
                             fig_mat = px.line(df_mat, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
                             fig_mat.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
                             fig_mat.update_layout(separators=',.', hovermode="closest", title="Matrículas", xaxis_title="Ano do Censo", yaxis_title="Total de Matrículas")
                             fig_mat.update_xaxes(type='category', fixedrange=True)
-                            fig_mat.update_yaxes(tickformat=',.0f', fixedrange=True)
+                            fig_mat.update_yaxes(tickformat=',.0f', range=[min_v_mat, max_v_mat], dtick=dtick_mat, fixedrange=True)
 
                         if not df_tur.empty:
+                            raw_min_tur, raw_max_tur = df_tur['Valor'].min(), df_tur['Valor'].max()
+                            if raw_max_tur == raw_min_tur:
+                                raw_max_tur = raw_min_tur + 10.0
+                            
+                            span_tur = raw_max_tur - raw_min_tur
+                            step_tur = span_tur / 8.0 if span_tur > 0 else 1.0
+                            min_v_tur = max(0.0, raw_min_tur - step_tur) # Trava o mínimo em 0 no mínimo
+                            max_v_tur = raw_max_tur + step_tur
+                            dtick_tur = (max_v_tur - min_v_tur) / 10.0
+
                             fig_tur = px.line(df_tur, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
                             fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
                             fig_tur.update_layout(separators=',.', hovermode="closest", title="Turmas", xaxis_title="Ano do Censo", yaxis_title="Total de Turmas")
                             fig_tur.update_xaxes(type='category', fixedrange=True)
-                            fig_tur.update_yaxes(tickformat=',.0f', fixedrange=True)
+                            fig_tur.update_yaxes(tickformat=',.0f', range=[min_v_tur, max_v_tur], dtick=dtick_tur, fixedrange=True)
 
                         safe_key_suffix = CHAVES_GRUPOS_METRICAS_QT.get(titulo_grupo, titulo_grupo.lower().replace("/", "_").replace(" ", "_"))
 
