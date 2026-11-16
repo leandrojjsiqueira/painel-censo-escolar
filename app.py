@@ -1209,10 +1209,6 @@ with aba_escolas:
         # ---------------------------------------------------------------------
         # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas
         # ---------------------------------------------------------------------
-        # ---------------------------------------------------------------------
-        # 2º Bloco: GRÁFICOS DA ABA 1
-        # ---------------------------------------------------------------------
-        # ---------------------------------------------------------------------
         # 2º Bloco: GRÁFICOS DA ABA 1
         # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas**", expanded=False):
@@ -1320,13 +1316,12 @@ with aba_escolas:
                         if not (colunas_mat_grupo or colunas_turma_grupo) or not anos_grafico:
                             continue
 
-                        # Consulta em lotes para buscar os valores desagregados por ano e métrica
                         expressoes = [
                             f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
                             for col in list(dict.fromkeys(colunas_mat_grupo + colunas_turma_grupo))
                         ]
                         
-                        registros_agrupados = []
+                        registos_agrupados = []
                         con = duckdb.connect()
                         try:
                             for lote_anos in quebrar_anos_em_lotes(anos_grafico, 3):
@@ -1344,7 +1339,7 @@ with aba_escolas:
                                     ano_val = int(linha["ANO"])
                                     for c_mat in colunas_mat_grupo:
                                         if c_mat in linha:
-                                            registros_agrupados.append({
+                                            registos_agrupados.append({
                                                 'ANO': ano_val,
                                                 'Metrica': c_mat,
                                                 'Valor': float(linha[c_mat] or 0)
@@ -1363,8 +1358,12 @@ with aba_escolas:
                         if df_agrupado.empty:
                             continue
 
-                        mapa_nomes_amigaveis = {f"QT_MAT_{s}": rotulo.split(" (")[0] for s, rotulo in opcoes_grupo.items()}
-                        mapa_nomes_amigaveis.update({f"QT_TUR_{s}": f"{rotulo.split(' (')[0]} (Turmas)" for s, rotulo in opcoes_grupo.items()})
+                        # Mapeamento limpo usando os nomes amigáveis puros
+                        mapa_nomes_amigaveis = {}
+                        for s in sufixos_grupo:
+                            desc = descricao_sufixo_qt(s)
+                            mapa_nomes_amigaveis[f"QT_MAT_{s}"] = desc
+                            mapa_nomes_amigaveis[f"QT_TUR_{s}"] = f"{desc} (Turmas)"
 
                         df_agrupado['Metrica_Nome'] = df_agrupado['Metrica'].map(mapa_nomes_amigaveis).fillna(df_agrupado['Metrica'])
                         df_agrupado['Valor_Fmt'] = df_agrupado['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
