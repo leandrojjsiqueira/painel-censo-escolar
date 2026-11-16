@@ -1841,20 +1841,26 @@ with aba_tecnicos:
         # ---------------------------------------------------------------------
         # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Cursos (Aba 2)
         # ---------------------------------------------------------------------
-        # 2º Bloco Aba 2: Gráficos de Cursos Técnicos
-        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Cursos**", expanded=False):
             @st.fragment
             def mostrar_graficos_tecnicos_fragmento():
                 st.markdown("### 📈 Evolução Histórica (Cursos Técnicos)")
+                st.markdown("##### Período e Filtros Históricos")
                 anos_tec_disp = sorted([int(a) for a in ano_tec]) if ano_tec else list(range(2023, 2026))
-                min_tec_sld, max_tec_sld = min(anos_tec_disp), max(anos_tec_disp)
+                min_tec_sld = min(anos_tec_disp)
+                max_tec_sld = max(anos_tec_disp)
 
                 if min_tec_sld == max_tec_sld:
                     anos_tec_sel = (min_tec_sld, max_tec_sld)
-                    st.info(f"ℹ️ Período fixado em **{min_tec_sld}**.")
+                    st.info(f"ℹ️ Período fixado em **{min_tec_sld}** conforme selecionado no filtro principal.")
                 else:
-                    anos_tec_sel = st.slider("Selecione o Período Histórico", min_value=min_tec_sld, max_value=max_tec_sld, value=(min_tec_sld, max_tec_sld), key="slider_tec")
+                    anos_tec_sel = st.slider(
+                        "Selecione o Período Histórico",
+                        min_value=min_tec_sld,
+                        max_value=max_tec_sld,
+                        value=(min_tec_sld, max_tec_sld),
+                        key="slider_tec"
+                    )
 
                 cur_nre_g2 = st.session_state.get("nre_g2", "Todas")
                 cur_mun_g2 = st.session_state.get("mun_g2", "Todas")
@@ -1868,25 +1874,37 @@ with aba_tecnicos:
                 )
 
                 g_t1, g_t2, g_t3, g_t4, g_t5, g_t6 = st.columns(6)
-                with g_t1: nre_tec_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g2, "nre_g2", "Todas")
-                with g_t2: mun_tec_graf = criar_filtro_selectbox("Município", op_mun_g2, "mun_g2", "Todas")
-                with g_t3: loc_tec_graf = criar_filtro_selectbox("Localização", op_loc_g2, "loc_g2", "Todas")
-                with g_t4: cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
-                with g_t5: nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas")
-                with g_t6: dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
+                with g_t1: 
+                    nre_tec_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g2, "nre_g2", "Todas")
+                with g_t2: 
+                    mun_tec_graf = criar_filtro_selectbox("Município", op_mun_g2, "mun_g2", "Todas")
+                with g_t3: 
+                    loc_tec_graf = criar_filtro_selectbox("Localização", op_loc_g2, "loc_g2", "Todas")
+                with g_t4: 
+                    cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
+                with g_t5: 
+                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas")
+                with g_t6: 
+                    dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
 
                 st.markdown("##### Descrição do Curso")
                 gd1, gd2 = st.columns(2)
+                
                 op_areas_graf = ["Todas"] + sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
                 op_nomes_graf = ["Todas"] + sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
 
-                with gd1: sel_area_graf = criar_filtro_selectbox("Área do Curso", op_areas_graf, "sel_area_graf", "Todas")
-                with gd2: sel_nome_curso_graf = criar_filtro_selectbox("Nome do Curso", op_nomes_graf, "sel_nome_curso_graf", "Todas")
+                with gd1: 
+                    sel_area_graf = criar_filtro_selectbox("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", op_areas_graf, "sel_area_graf", "Todas")
+                with gd2: 
+                    sel_nome_curso_graf = criar_filtro_selectbox("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", op_nomes_graf, "sel_nome_curso_graf", "Todas")
 
                 st.markdown("##### Métrica Específica para o Gráfico")
+                
                 gt1, gt2 = st.columns(2)
-                with gt1: sel_qtd_tec_graf = criar_seletor_metricas("Quantidade de Cursos", OPCOES_CURSOS_QTD, "sel_qtd_tec_g1")
-                with gt2: sel_mat_tec_graf = criar_seletor_metricas("Quantidade de Matrículas", OPCOES_CURSOS_MAT, "sel_mat_tec_g1")
+                with gt1: 
+                    sel_qtd_tec_graf = criar_seletor_metricas("Quantidade de Cursos", OPCOES_CURSOS_QTD, "sel_qtd_tec_g1")
+                with gt2: 
+                    sel_mat_tec_graf = criar_seletor_metricas("Quantidade de Matrículas", OPCOES_CURSOS_MAT, "sel_mat_tec_g1")
 
                 grupos_metricas_tec_graf = {}
                 if sel_qtd_tec_graf: grupos_metricas_tec_graf["Quantidade de Cursos"] = (sel_qtd_tec_graf, OPCOES_CURSOS_QTD)
@@ -1896,7 +1914,11 @@ with aba_tecnicos:
                     df_graf_tec_base = df_tecnicos.copy()
                     if not df_graf_tec_base.empty:
                         df_graf_tec_base['ANO_INT'] = df_graf_tec_base['NU_ANO_CENSO'].astype(str).str.split('.').str[0].astype(int)
-                        df_graf_tec_base = df_graf_tec_base[(df_graf_tec_base['ANO_INT'] >= anos_tec_sel[0]) & (df_graf_tec_base['ANO_INT'] <= anos_tec_sel[1])]
+                        df_graf_tec_base = df_graf_tec_base[
+                            (df_graf_tec_base['ANO_INT'] >= anos_tec_sel[0]) & 
+                            (df_graf_tec_base['ANO_INT'] <= anos_tec_sel[1])
+                        ]
+
                         if nre_tec_graf and nre_tec_graf not in ["Todas", "Todos"] and "NO_NRE" in df_graf_tec_base.columns:
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_NRE'].astype(str).str.strip() == nre_tec_graf]
                         if mun_tec_graf and mun_tec_graf not in ["Todas", "Todos"]:
@@ -1912,6 +1934,7 @@ with aba_tecnicos:
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['CO_ENTIDADE'].astype(str).str.split('.').str[0].str.strip() == cod_limpo_g2]
                         if nome_tec_sel_g and nome_tec_sel_g not in ["Todas", "Todos"]:
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_ENTIDADE'].astype(str).str.strip() == nome_tec_sel_g]
+
                         if sel_area_graf != "Todas" and "NO_AREA_CURSO_PROFISSIONAL" in df_graf_tec_base.columns:
                             df_graf_tec_base = df_graf_tec_base[df_graf_tec_base['NO_AREA_CURSO_PROFISSIONAL'].astype(str).str.strip() == sel_area_graf]
                         if sel_nome_curso_graf != "Todas" and "NO_CURSO_EDUC_PROFISSIONAL" in df_graf_tec_base.columns:
@@ -1919,9 +1942,14 @@ with aba_tecnicos:
 
                     for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_tec_graf.items():
                         colunas_grupo = extrair_chaves_por_rotulos(selecionados_grupo, opcoes_grupo)
-                        if not colunas_grupo: continue
-                        cols_presentes = [c for c in list(dict.fromkeys(["ANO_INT"] + colunas_grupo)) if c in df_graf_tec_base.columns]
-                        if df_graf_tec_base.empty or not cols_presentes: continue
+                        if not colunas_grupo:
+                            continue
+
+                        cols_necessarias = list(dict.fromkeys(["ANO_INT"] + colunas_grupo))
+                        cols_presentes = [c for c in cols_necessarias if c in df_graf_tec_base.columns]
+
+                        if df_graf_tec_base.empty or not cols_presentes:
+                            continue
 
                         df_sub_grupo = df_graf_tec_base[cols_presentes]
                         registros_agrupados = []
@@ -1932,9 +1960,9 @@ with aba_tecnicos:
                             registros_agrupados.append(row_g)
 
                         df_agrupado = pd.DataFrame(registros_agrupados)
-                        if df_agrupado.empty: continue
+                        if df_agrupado.empty:
+                            continue
 
-                        # Mapeamento limpo usando apenas o nome amigável puro (removendo os códigos)
                         mapa_nomes_tec = {}
                         for s in colunas_grupo:
                             rotulo_original = opcoes_grupo.get(s, s)
@@ -1948,22 +1976,54 @@ with aba_tecnicos:
                             df_melt_tec['Valor_Fmt'] = df_melt_tec['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
                             st.markdown(f"### {titulo_grupo}")
-                            st.caption(formatar_legenda_filtros(anos_tec_sel[0], anos_tec_sel[1], mun_tec_graf, nre_tec_graf, dep_tec_graf, loc_tec_graf, selecionados_grupo))
+                            
+                            subt_tec = formatar_legenda_filtros(
+                                anos_tec_sel[0], 
+                                anos_tec_sel[1], 
+                                mun_tec_graf, 
+                                nre_tec_graf, 
+                                dep_tec_graf, 
+                                loc_tec_graf, 
+                                selecionados_grupo
+                            )
+                            st.caption(subt_tec)
 
-                            fig_tec = px.line(df_melt_tec, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
-                            fig_tec.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Total:</b> %{customdata[0]}<extra></extra>")
-                            fig_tec.update_layout(separators=',.', hovermode="closest", xaxis_title="Ano do Censo", yaxis_title=f"Total de {titulo_grupo}")
+                            raw_min_tec, raw_max_tec = df_melt_tec['Valor'].min(), df_melt_tec['Valor'].max()
+                            if raw_max_tec == raw_min_tec:
+                                raw_max_tec = raw_min_tec + 10.0
+                            
+                            span_tec = raw_max_tec - raw_min_tec
+                            step_tec = span_tec / 8.0 if span_tec > 0 else 1.0
+                            min_v_tec = max(0.0, raw_min_tec - step_tec) # Trava o mínimo em 0 no mínimo
+                            max_v_tec = raw_max_tec + step_tec
+                            dtick_tec = (max_v_tec - min_v_tec) / 10.0
+
+                            fig_tec = px.line(
+                                df_melt_tec,
+                                x='ANO',
+                                y='Valor',
+                                color='Metrica_Nome',
+                                markers=True,
+                                custom_data=['Valor_Fmt']
+                            )
+                            fig_tec.update_traces(
+                                hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>"
+                            )
+                            fig_tec.update_layout(
+                                separators=',.',
+                                hovermode="closest",
+                                xaxis_title="Ano do Censo",
+                                yaxis_title=f"Total de {titulo_grupo}"
+                            )
                             fig_tec.update_xaxes(type='category', fixedrange=True)
-                            fig_tec.update_yaxes(tickformat=',.0f', fixedrange=True)
+                            fig_tec.update_yaxes(tickformat=',.0f', range=[min_v_tec, max_v_tec], dtick=dtick_tec, fixedrange=True)
 
                             st.plotly_chart(fig_tec, use_container_width=True, config={'displayModeBar': False}, key=f"fig_tec_{titulo_grupo.lower().replace(' ', '_')}")
                             st.markdown("---")
                 else:
-                    st.info("ℹ️ Selecione ao menos uma métrica acima.")
+                    st.info("ℹ️ Selecione ao menos uma métrica acima para exibir os gráficos.")
 
             mostrar_graficos_tecnicos_fragmento()
-
-        st.markdown("<br>", unsafe_allow_html=True)
 
         # RELATÓRIO DA ABA 2
         @st.fragment
