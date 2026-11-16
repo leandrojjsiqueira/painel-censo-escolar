@@ -1321,7 +1321,7 @@ with aba_escolas:
                             for col in list(dict.fromkeys(colunas_mat_grupo + colunas_turma_grupo))
                         ]
                         
-                        registos_agrupados = []
+                        registros_agrupados = []
                         con = duckdb.connect()
                         try:
                             for lote_anos in quebrar_anos_em_lotes(anos_grafico, 3):
@@ -1339,7 +1339,7 @@ with aba_escolas:
                                     ano_val = int(linha["ANO"])
                                     for c_mat in colunas_mat_grupo:
                                         if c_mat in linha:
-                                            registos_agrupados.append({
+                                            registros_agrupados.append({
                                                 'ANO': ano_val,
                                                 'Metrica': c_mat,
                                                 'Valor': float(linha[c_mat] or 0)
@@ -1358,7 +1358,6 @@ with aba_escolas:
                         if df_agrupado.empty:
                             continue
 
-                        # Mapeamento limpo usando os nomes amigáveis puros
                         mapa_nomes_amigaveis = {}
                         for s in sufixos_grupo:
                             desc = descricao_sufixo_qt(s)
