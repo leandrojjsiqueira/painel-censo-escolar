@@ -1392,10 +1392,10 @@ with aba_escolas:
                                 raw_max_mat = raw_min_mat + 10.0
                             
                             span_mat = raw_max_mat - raw_min_mat
-                            step_mat = span_mat / 8.0 if span_mat > 0 else 1.0
+                            step_mat = span_mat / 4.0 if span_mat > 0 else 1.0
                             min_v_mat = max(0.0, raw_min_mat - step_mat) # Trava o mínimo em 0 no mínimo
                             max_v_mat = raw_max_mat + step_mat
-                            dtick_mat = (max_v_mat - min_v_mat) / 10.0
+                            dtick_mat = (max_v_mat - min_v_mat) / 6.0
 
                             fig_mat = px.line(df_mat, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
                             fig_mat.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
@@ -1409,10 +1409,10 @@ with aba_escolas:
                                 raw_max_tur = raw_min_tur + 10.0
                             
                             span_tur = raw_max_tur - raw_min_tur
-                            step_tur = span_tur / 8.0 if span_tur > 0 else 1.0
+                            step_tur = span_tur / 4.0 if span_tur > 0 else 1.0
                             min_v_tur = max(0.0, raw_min_tur - step_tur) # Trava o mínimo em 0 no mínimo
                             max_v_tur = raw_max_tur + step_tur
-                            dtick_tur = (max_v_tur - min_v_tur) / 10.0
+                            dtick_tur = (max_v_tur - min_v_tur) / 6.0
 
                             fig_tur = px.line(df_tur, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
                             fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
