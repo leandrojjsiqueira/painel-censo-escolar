@@ -1209,18 +1209,30 @@ with aba_escolas:
         # ---------------------------------------------------------------------
         # 2º Bloco: 🔎 Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas
         # ---------------------------------------------------------------------
+        # ---------------------------------------------------------------------
+        # 2º Bloco: GRÁFICOS DA ABA 1
+        # ---------------------------------------------------------------------
         with st.expander("🔎 **Seleção de Visualização Instantânea dos Gráficos de Matrículas e Turmas**", expanded=False):
             @st.fragment
             def mostrar_graficos_escolas_fragmento():
                 st.markdown("### 📈 Evolução Histórica (Escolas)")
+                
+                st.markdown("##### Período e Filtros Históricos")
                 anos_disponiveis = sorted([int(a) for a in ano_esc]) if ano_esc else list(range(2007, 2026))
-                min_ano_sld, max_ano_sld = min(anos_disponiveis), max(anos_disponiveis)
+                min_ano_sld = min(anos_disponiveis)
+                max_ano_sld = max(anos_disponiveis)
 
                 if min_ano_sld == max_ano_sld:
                     anos_selecionados = (min_ano_sld, max_ano_sld)
                     st.info(f"ℹ️ Período fixado em **{min_ano_sld}**.")
                 else:
-                    anos_selecionados = st.slider("Selecione o Período Histórico", min_value=min_ano_sld, max_value=max_ano_sld, value=(min_ano_sld, max_ano_sld), key="slider_a2")
+                    anos_selecionados = st.slider(
+                        "Selecione o Período Histórico",
+                        min_value=min_ano_sld,
+                        max_value=max_ano_sld,
+                        value=(min_ano_sld, max_ano_sld),
+                        key="slider_a2"
+                    )
 
                 cur_nre_g1 = st.session_state.get("nre_g1", "Todas")
                 cur_mun_g1 = st.session_state.get("mun_g1", "Todas")
@@ -1235,18 +1247,25 @@ with aba_escolas:
                 )
 
                 g_c1, g_c2, g_c3, g_c4, g_c5, g_c6, g_c7 = st.columns(7)
-                with g_c1: nre_esc_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g1, "nre_g1", "Todas")
-                with g_c2: mun_esc_graf = criar_filtro_selectbox("Município", op_mun_g1, "mun_g1", "Todas")
-                with g_c3: loc_esc_graf = criar_filtro_selectbox("Localização", op_loc_g1, "loc_g1", "Todas")
-                with g_c4: cod_esc_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g1, "cod_esc_sel_g1", "Todos")
-                with g_c5: nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
-                with g_c6: reg_g_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_g1, "poder_g_v1", "Todas")
-                with g_c7: dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
+                with g_c1: 
+                    nre_esc_graf = criar_filtro_selectbox("Núcleo Regional", op_nre_g1, "nre_g1", "Todas")
+                with g_c2: 
+                    mun_esc_graf = criar_filtro_selectbox("Município", op_mun_g1, "mun_g1", "Todas")
+                with g_c3: 
+                    loc_esc_graf = criar_filtro_selectbox("Localização", op_loc_g1, "loc_g1", "Todas")
+                with g_c4: 
+                    cod_esc_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g1, "cod_esc_sel_g1", "Todos")
+                with g_c5: 
+                    nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
+                with g_c6: 
+                    reg_g_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_g1, "poder_g_v1", "Todas")
+                with g_c7: 
+                    dep_esc_graf = criar_filtro_checkboxes("Rede", op_dep_g1, "dep_g1")
 
-                st.markdown("##### Métrica Específica para os Gráficos")
+                st.markdown("##### Métrica Específica para o Gráfico")
+                
                 grupos_opcoes_g = construir_opcoes_metricas_qt(colunas_escolas)[0]
                 selecoes_metricas_g = {}
-
                 for inicio_grupos in range(0, len(GRUPOS_METRICAS_QT), 4):
                     nomes_linha_grupos = GRUPOS_METRICAS_QT[inicio_grupos:inicio_grupos + 4]
                     colunas_grupos_ui = st.columns(len(nomes_linha_grupos))
@@ -1254,88 +1273,111 @@ with aba_escolas:
                         with coluna_ui:
                             chave_grupo_ui = CHAVES_GRUPOS_METRICAS_QT[nome_grupo_ui]
                             selecoes_metricas_g[nome_grupo_ui] = criar_seletor_metricas(
-                                nome_grupo_ui, grupos_opcoes_g[nome_grupo_ui], f"sel_{chave_grupo_ui}_a2"
+                                nome_grupo_ui,
+                                grupos_opcoes_g[nome_grupo_ui],
+                                f"sel_{chave_grupo_ui}_a2"
                             )
 
                 grupos_metricas_a2 = {
                     nome_grupo: (selecoes_metricas_g[nome_grupo], grupos_opcoes_g[nome_grupo])
-                    for nome_grupo in GRUPOS_METRICAS_QT if selecoes_metricas_g.get(nome_grupo)
+                    for nome_grupo in GRUPOS_METRICAS_QT
+                    if selecoes_metricas_g.get(nome_grupo)
                 }
 
                 if grupos_metricas_a2:
-                    anos_grafico = [str(a) for a in (ano_esc or anos_disponiveis) if anos_selecionados[0] <= int(a) <= anos_selecionados[1]]
+                    anos_grafico = [
+                        str(a) for a in (ano_esc or anos_disponiveis)
+                        if anos_selecionados[0] <= int(a) <= anos_selecionados[1]
+                    ]
                     where_grafico = montar_where_escolas(
-                        where_clause_filtros_escolas, nre=nre_esc_graf, municipio=mun_esc_graf,
-                        dependencias=dep_esc_graf, localizacao=loc_esc_graf, codigo=cod_esc_sel_g,
-                        nome=nome_esc_sel_g, poder_publico=reg_g_sel
+                        where_clause_filtros_escolas,
+                        nre=nre_esc_graf,
+                        municipio=mun_esc_graf,
+                        dependencias=dep_esc_graf,
+                        localizacao=loc_esc_graf,
+                        codigo=cod_esc_sel_g,
+                        nome=nome_esc_sel_g,
+                        poder_publico=reg_g_sel
                     )
 
                     for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_a2.items():
                         sufixos_grupo = extrair_chaves_por_rotulos(selecionados_grupo, opcoes_grupo)
-                        if not sufixos_grupo: continue
+                        if not sufixos_grupo:
+                            continue
 
-                        colunas_mat_grupo = [f"QT_MAT_{s}" for s in sufixos_grupo if f"QT_MAT_{s}" in colunas_escolas]
-                        colunas_turma_grupo = [f"QT_TUR_{s}" for s in sufixos_grupo if f"QT_TUR_{s}" in colunas_escolas]
+                        colunas_mat_grupo = [
+                            f"QT_MAT_{s}" for s in sufixos_grupo
+                            if f"QT_MAT_{s}" in colunas_escolas
+                        ]
+                        colunas_turma_grupo = [
+                            f"QT_TUR_{s}" for s in sufixos_grupo
+                            if f"QT_TUR_{s}" in colunas_escolas
+                        ]
 
-                        if not (colunas_mat_grupo or colunas_turma_grupo) or not anos_grafico: continue
+                        if not (colunas_mat_grupo or colunas_turma_grupo) or not anos_grafico:
+                            continue
 
                         df_agrupado = consultar_evolucao_metricas_lotes(
-                            CAMINHO_ESCOLAS_PARQUET, where_grafico, anos_grafico,
-                            colunas_mat_grupo, colunas_turma_grupo, tamanho_lote=3
+                            CAMINHO_ESCOLAS_PARQUET,
+                            where_grafico,
+                            anos_grafico,
+                            colunas_mat_grupo,
+                            colunas_turma_grupo,
+                            tamanho_lote=3
                         )
-                        if df_agrupado.empty: continue
+                        if df_agrupado.empty:
+                            continue
+
+                        df_agrupado['Matrículas_Fmt'] = df_agrupado['Matrículas'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                        df_agrupado['Turmas_Fmt'] = df_agrupado['Turmas'].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
                         st.markdown(f"### {titulo_grupo}")
-                        st.caption(formatar_legenda_filtros(anos_selecionados[0], anos_selecionados[1], mun_esc_graf, nre_esc_graf, dep_esc_graf, loc_esc_graf, selecionados_grupo))
+                        
+                        subtitulo_dinamico = formatar_legenda_filtros(
+                            anos_selecionados[0], 
+                            anos_selecionados[1], 
+                            mun_esc_graf, 
+                            nre_esc_graf,
+                            dep_esc_graf, 
+                            loc_esc_graf, 
+                            selecionados_grupo
+                        )
+                        st.caption(subtitulo_dinamico)
 
-                        mapa_nomes_amigaveis = {f"QT_MAT_{s}": rotulo.split(" (")[0] for s, rotulo in opcoes_grupo.items()}
-                        mapa_nomes_amigaveis.update({f"QT_TUR_{s}": f"{rotulo.split(' (')[0]} (Turmas)" for s, rotulo in opcoes_grupo.items()})
+                        fig_mat = px.line(df_agrupado, x='ANO', y='Matrículas', markers=True, custom_data=['Matrículas_Fmt'])
+                        fig_mat.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Matrículas:</b> %{customdata[0]}<extra></extra>")
+                        fig_mat.update_layout(separators=',.', hovermode="closest", title="Matrículas", xaxis_title="Ano do Censo", yaxis_title="Total de Matrículas")
+                        fig_mat.update_xaxes(type='category', fixedrange=True)
+                        min_mat, max_mat = df_agrupado['Matrículas'].min(), df_agrupado['Matrículas'].max()
+                        fig_mat.update_yaxes(tickformat=',.0f', range=[min_mat * 0.95, max_mat * 1.05] if max_mat > 0 else None, fixedrange=True)
 
-                        cols_melt_mat = [c for c in colunas_mat_grupo if c in df_agrupado.columns]
-                        cols_melt_tur = [c for c in colunas_turma_grupo if c in df_agrupado.columns]
+                        fig_tur = px.line(df_agrupado, x='ANO', y='Turmas', markers=True, custom_data=['Turmas_Fmt'])
+                        fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Turmas:</b> %{customdata[0]}<extra></extra>")
+                        fig_tur.update_layout(separators=',.', hovermode="closest", title="Turmas", xaxis_title="Ano do Censo", yaxis_title="Total de Turmas")
+                        fig_tur.update_xaxes(type='category', fixedrange=True)
+                        min_tur, max_tur = df_agrupado['Turmas'].min(), df_agrupado['Turmas'].max()
+                        fig_tur.update_yaxes(tickformat=',.0f', range=[min_tur * 0.95, max_tur * 1.05] if max_tur > 0 else None, fixedrange=True)
 
-                        fig_mat, fig_tur = None, None
+                        tem_matriculas = bool(colunas_mat_grupo)
+                        tem_turmas = bool(colunas_turma_grupo)
+                        safe_key_suffix = CHAVES_GRUPOS_METRICAS_QT.get(titulo_grupo, titulo_grupo.lower().replace("/", "_").replace(" ", "_"))
 
-                        if cols_melt_mat:
-                            df_melt_mat = df_agrupado.melt(id_vars=['ANO'], value_vars=cols_melt_mat, var_name='Metrica', value_name='Valor')
-                            df_melt_mat['Metrica_Nome'] = df_melt_mat['Metrica'].map(mapa_nomes_amigaveis).fillna(df_melt_mat['Metrica'])
-                            df_melt_mat['Valor_Fmt'] = df_melt_mat['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
-
-                            fig_mat = px.line(df_melt_mat, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
-                            fig_mat.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
-                            fig_mat.update_layout(separators=',.', hovermode="closest", title="Matrículas", xaxis_title="Ano do Censo", yaxis_title="Total de Matrículas")
-                            fig_mat.update_xaxes(type='category', fixedrange=True)
-                            fig_mat.update_yaxes(tickformat=',.0f', fixedrange=True)
-
-                        if cols_melt_tur:
-                            df_melt_tur = df_agrupado.melt(id_vars=['ANO'], value_vars=cols_melt_tur, var_name='Metrica', value_name='Valor')
-                            df_melt_tur['Metrica_Nome'] = df_melt_tur['Metrica'].map(mapa_nomes_amigaveis).fillna(df_melt_tur['Metrica'])
-                            df_melt_tur['Valor_Fmt'] = df_melt_tur['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
-
-                            fig_tur = px.line(df_melt_tur, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
-                            fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
-                            fig_tur.update_layout(separators=',.', hovermode="closest", title="Turmas", xaxis_title="Ano do Censo", yaxis_title="Total de Turmas")
-                            fig_tur.update_xaxes(type='category', fixedrange=True)
-                            fig_tur.update_yaxes(tickformat=',.0f', fixedrange=True)
-
-                        safe_key = CHAVES_GRUPOS_METRICAS_QT.get(titulo_grupo, "g")
-
-                        if fig_mat and fig_tur:
+                        if tem_matriculas and tem_turmas:
                             g1, g2 = st.columns(2)
-                            with g1: st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key}")
-                            with g2: st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key}")
-                        elif fig_mat:
-                            st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key}")
-                        elif fig_tur:
-                            st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key}")
+                            with g1:
+                                st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key_suffix}")
+                            with g2:
+                                st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key_suffix}")
+                        elif tem_matriculas:
+                            st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key_suffix}")
+                        elif tem_turmas:
+                            st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key_suffix}")
 
                         st.markdown("---")
                 else:
-                    st.info("ℹ️ Selecione ao menos uma métrica acima.")
+                    st.info("ℹ️ Selecione ao menos uma métrica acima para exibir os gráficos.")
 
             mostrar_graficos_escolas_fragmento()
-
-        st.markdown("<br>", unsafe_allow_html=True)
 
         # RELATÓRIO DA ABA 1
         @st.fragment
