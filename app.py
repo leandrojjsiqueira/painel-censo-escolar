@@ -1410,10 +1410,10 @@ with aba_escolas:
                                 raw_max_tur = raw_min_tur + 10.0
                             
                             span_tur = raw_max_tur - raw_min_tur
-                            step_tur = span_tur / 3.0 if span_tur > 0 else 1.0
+                            step_tur = span_tur / 5.0 if span_tur > 0 else 1.0
                             min_v_tur = max(0.0, raw_min_tur - step_tur) # Trava o mínimo em 0 no mínimo
                             max_v_tur = raw_max_tur + step_tur
-                            dtick_tur = max(1, math.ceil((max_v_tur - min_v_tur) / 5.0))
+                            dtick_tur = max(1, math.ceil((max_v_tur - min_v_tur) / 7.0))
 
                             fig_tur = px.line(df_tur, x='ANO', y='Valor', color='Metrica_Nome', markers=True, custom_data=['Valor_Fmt'])
                             fig_tur.update_traces(hovertemplate="<b>Ano:</b> %{x}<br><b>Valor:</b> %{customdata[0]}<extra></extra>")
