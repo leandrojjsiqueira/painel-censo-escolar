@@ -7,6 +7,7 @@ import plotly.express as px
 import io
 import unicodedata
 import re
+import math
 
 # =============================================================================
 # CONFIGURAÇÃO DA PÁGINA
