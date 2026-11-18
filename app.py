@@ -740,7 +740,155 @@ def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
         condicoes.append(f"{sql_int_safe('IN_PODER_PUBLICO_PARCERIA')} = {pod_id}")
 
     return " AND ".join(condicoes)
+OPCOES_ESCOLA_POSSUI = [
+    "1 - Sim",
+    "0 - Não",
+    "9 - Não informado",
+    "Vazio"
+]
 
+
+def criar_filtro_escola_possui(colunas_disponiveis, chave="filtro_in_a1"):
+
+    cols_in = sorted([
+        c for c in colunas_disponiveis
+        if str(c).startswith("IN_")
+    ])
+
+    if not cols_in:
+        return [], []
+
+    val_key = f"{chave}__valores"
+    col_key = f"{chave}__colunas"
+    busca_key = f"{chave}__busca"
+
+    if val_key not in st.session_state:
+        st.session_state[val_key] = []
+
+    if col_key not in st.session_state:
+        st.session_state[col_key] = []
+
+    selecionadas = st.session_state[col_key]
+
+    if isinstance(selecionadas, str):
+        selecionadas = [selecionadas] if selecionadas else []
+
+    selecionadas = [c for c in selecionadas if c in cols_in]
+    st.session_state[col_key] = selecionadas
+
+    # Inicializa os estados das variáveis
+    for coluna in cols_in:
+        cb_k = f"{chave}__var__{coluna}"
+
+        if cb_k not in st.session_state:
+            st.session_state[cb_k] = coluna in selecionadas
+
+    with st.popover("Escola possui?"):
+
+        st.markdown("**1. Selecione os valores:**")
+
+        c_v1, c_v2, c_v3, c_v4 = st.columns(4)
+        cols_ui = [c_v1, c_v2, c_v3, c_v4]
+
+        valores_marcados = []
+
+        for idx, opcao in enumerate(OPCOES_ESCOLA_POSSUI):
+
+            cb_k = f"{chave}__cb_{idx}"
+
+            if cb_k not in st.session_state:
+                st.session_state[cb_k] = opcao in st.session_state[val_key]
+
+            with cols_ui[idx]:
+                if st.checkbox(opcao, key=cb_k):
+                    valores_marcados.append(opcao)
+
+        st.session_state[val_key] = valores_marcados
+
+        st.markdown("---")
+        st.markdown("**2. Escolha as variáveis (`IN_`):**")
+
+        termo = st.text_input(
+            "🔎 Buscar variável:",
+            key=busca_key,
+            placeholder="Ex: INTERNET, BIBLIOTECA..."
+        ).strip().upper()
+
+        opcoes_filtradas = [
+            c for c in cols_in
+            if not termo or termo in c
+        ]
+
+        st.markdown("**Variáveis disponíveis:**")
+
+        if st.button("🧹 Desmarcar tudo", key=f"{chave}__desmarcar_tudo"):
+
+            st.session_state[col_key] = []
+
+            for coluna in cols_in:
+                st.session_state[f"{chave}__var__{coluna}"] = False
+
+        for coluna in opcoes_filtradas:
+
+            cb_k = f"{chave}__var__{coluna}"
+
+            st.checkbox(
+                coluna,
+                key=cb_k
+            )
+
+        colunas_escolhidas = [
+            coluna for coluna in cols_in
+            if st.session_state.get(
+                f"{chave}__var__{coluna}", False
+            )
+        ]
+
+        st.session_state[col_key] = colunas_escolhidas
+
+    return colunas_escolhidas, valores_marcados
+
+
+def montar_sql_escola_possui(colunas_in, valores):
+
+    if not colunas_in or not valores:
+        return ""
+
+    if isinstance(colunas_in, str):
+        colunas_in = [colunas_in]
+
+    condicoes_variaveis = []
+
+    for coluna in colunas_in:
+
+        col_sql = identificador_sql(coluna)
+        conds = []
+
+        for val in valores:
+
+            if val.startswith("1"):
+                conds.append(f"{sql_int_safe(col_sql)} = 1")
+
+            elif val.startswith("0"):
+                conds.append(f"{sql_int_safe(col_sql)} = 0")
+
+            elif val.startswith("9"):
+                conds.append(f"{sql_int_safe(col_sql)} = 9")
+
+            elif val == "Vazio":
+                conds.append(
+                    f"({col_sql} IS NULL OR TRIM(CAST({col_sql} AS VARCHAR)) = '')"
+                )
+
+        if conds:
+            condicoes_variaveis.append(
+                f"({' OR '.join(conds)})"
+            )
+
+    return (
+        f"({' OR '.join(condicoes_variaveis)})"
+        if condicoes_variaveis else ""
+    )
 def consultar_contagens_escolas(caminho_parquet, where_clause):
     con = duckdb.connect()
     try:
@@ -910,7 +1058,7 @@ with aba_escolas:
                 "ano_esc_a1", "nre_esc_a1", "mun_esc_sel_a1", "dep_esc_a1", "loc_esc_a1",
                 "nre_t_v1", "mun_t_v1", "dep_t_v1", "loc_t_v1", "cod_t_busca_v1", "nome_t_busca_v1", "reg_t_v1", "poder_g_v1", "sel_etapa_t1", "sel_sexo_t1", "sel_raca_t1", "sel_idade_t1", "sel_turno_t1",
                 "nre_g1", "mun_g1", "dep_g1", "loc_g1", "cod_esc_busca_g1", "nome_esc_busca_g1", "sel_etapa_a2", "sel_sexo_a2", "sel_raca_a2", "sel_idade_a2", "sel_turno_a2",
-                "ms_esc_confirmado"
+                "ms_esc_confirmado", "filtro_in_a1__valores", "filtro_in_a1__colunas", "filtro_in_a1__busca", "filtro_in_a1__cb_0", "filtro_in_a1__cb_1", "filtro_in_a1__cb_2", "filtro_in_a1__cb_3"
             ]:
                 st.session_state.pop(chave, None)
                 for k in list(st.session_state.keys()):
@@ -918,7 +1066,18 @@ with aba_escolas:
                         st.session_state.pop(k, None)
             for area_selecao in ("t1", "a2"):
                 for slug_grupo in CHAVES_GRUPOS_METRICAS_QT.values():
-                    st.session_state.pop(f"sel_{slug_grupo}_{area_selecao}__multi_v4", None)
+                    st.session_state.pop(
+                        f"sel_{slug_grupo}_{area_selecao}__multi_v4", None
+                    )
+
+            # Limpar as variáveis IN_ e seus checkboxes
+            for k in list(st.session_state.keys()):
+                if (
+                    k.startswith("filtro_in_a1__var__")
+                    or k.startswith("filtro_in_a1__cb_")
+                ):
+                    st.session_state.pop(k, None)
+
             st.rerun()
 
         default_ano_a1 = ["2025"]
@@ -948,18 +1107,42 @@ with aba_escolas:
             df_esc_ano, nre_sel=cur_nre_p1, mun_sel=cur_mun_p1, dep_sel=cur_dep_p1, loc_sel=cur_loc_p1
         )
 
+                colunas_escolas = obter_colunas_parquet(CAMINHO_ESCOLAS_PARQUET)
+
         st.markdown("##### Localização e Identificação da Escola")
-        c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 1.5, 2])
+
+        c1, c2, c3, c4, c5, c6 = st.columns([2, 2, 2, 1.5, 2, 2.3])
+
         with c1:
-            nre_esc = criar_filtro_selectbox("Núcleo Regional", op_nre_p1, "nre_esc_a1", "Todas")
+            nre_esc = criar_filtro_selectbox(
+                "Núcleo Regional", op_nre_p1, "nre_esc_a1", "Todas"
+            )
+
         with c2:
-            mun_esc = criar_filtro_selectbox("Município", op_mun_p1, "mun_esc_sel_a1", "Todas")
+            mun_esc = criar_filtro_selectbox(
+                "Município", op_mun_p1, "mun_esc_sel_a1", "Todas"
+            )
+
         with c3:
-            loc_esc = criar_filtro_selectbox("Localização", op_loc_p1, "loc_esc_a1", "Todas")
+            loc_esc = criar_filtro_selectbox(
+                "Localização", op_loc_p1, "loc_esc_a1", "Todas"
+            )
+
         with c4:
-            ano_esc = criar_filtro_checkboxes("Ano(s) do Censo", ANOS_ESCOLAS_DIC, "ano_esc_a1", valor_padrao=["2025"])
+            ano_esc = criar_filtro_checkboxes(
+                "Ano(s) do Censo", ANOS_ESCOLAS_DIC,
+                "ano_esc_a1", valor_padrao=["2025"]
+            )
+
         with c5:
-            dep_esc = criar_filtro_checkboxes("Rede", op_dep_p1, "dep_esc_a1")
+            dep_esc = criar_filtro_checkboxes(
+                "Rede", op_dep_p1, "dep_esc_a1"
+            )
+
+        with c6:
+            col_in_esc, vals_in_esc = criar_filtro_escola_possui(
+                colunas_escolas, "filtro_in_a1"
+            )
 
     where_esc = []
     if nre_esc and nre_esc not in ["Todas", "Todos"]:
@@ -975,6 +1158,15 @@ with aba_escolas:
         loc_id = int(loc_esc.split(' - ')[0])
         where_esc.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id}")
 
+    # Filtro Escola possui?
+    sql_in_filtro = montar_sql_escola_possui(
+        col_in_esc,
+        vals_in_esc
+    )
+
+    if sql_in_filtro:
+        where_esc.append(sql_in_filtro)
+
     where_clause_filtros_escolas = " AND ".join(where_esc)
     where_clause_escolas = montar_where_escolas(
         where_clause_filtros_escolas,
@@ -982,8 +1174,6 @@ with aba_escolas:
     )
 
     try:
-        colunas_escolas = obter_colunas_parquet(CAMINHO_ESCOLAS_PARQUET)
-
         df_escolas_meta = df_escolas_raw
         if ano_esc and "NU_ANO_CENSO" in df_escolas_meta.columns:
             anos_meta = df_escolas_meta["NU_ANO_CENSO"].astype(str).str.split('.').str[0].str.strip()
