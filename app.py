@@ -1780,8 +1780,9 @@ with aba_tecnicos:
 
         st.markdown("##### Localização e Identificação da Escola")
 
-        t1, t2, t3, t4, t5, t6 = st.columns([2, 2, 2, 1.5, 2, 2])
+        t1, t2, t3, t4, t5, t6 = st.columns([2, 2, 2, 2, 1.5, 2])
 
+        # SELECTBOXES À ESQUERDA
         with t1:
             nre_tec = criar_filtro_selectbox(
                 "Núcleo Regional", op_nre_p3, "nre_tec", "Todas"
@@ -1798,22 +1799,23 @@ with aba_tecnicos:
             )
 
         with t4:
-            ano_tec = criar_filtro_checkboxes(
-                "Ano(s) do Censo", ANOS_TECNICOS_DIC,
-                "ano_tec", valor_padrao=["2025"]
-            )
-
-        with t5:
-            dep_tec = criar_filtro_checkboxes(
-                "Rede", op_dep_p3, "dep_tec"
-            )
-
-        with t6:
             reg_tec = criar_filtro_selectbox(
                 "Escola Parceira",
                 ["Todas"] + op_reg_p3,
                 "reg_tec",
                 "Todas"
+            )
+
+        # POPOVERS À DIREITA
+        with t5:
+            ano_tec = criar_filtro_checkboxes(
+                "Ano(s) do Censo", ANOS_TECNICOS_DIC,
+                "ano_tec", valor_padrao=["2025"]
+            )
+
+        with t6:
+            dep_tec = criar_filtro_checkboxes(
+                "Rede", op_dep_p3, "dep_tec"
             )
 
     where_tec = []
