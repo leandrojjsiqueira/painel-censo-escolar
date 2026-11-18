@@ -1717,8 +1717,7 @@ with aba_escolas:
 with aba_tecnicos:
     with st.expander("📶 **Painel de Filtros - Cursos Técnicos**", expanded=True):
         if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3"):
-            for chave in ["ano_tec", "nre_tec", "mun_tec_sel_a3", "dep_tec", "loc_tec", "cod_tec_sel_a3", "nome_tec_sel_a3", "nre_t_v2", "mun_t_v2", "dep_t_v2", "loc_t_v2", "cod_t_busca_v2", "nome_t_busca_v2", "sel_qtd_tec", "sel_mat_tec", "sel_area_inst", "sel_nome_curso_inst", "nre_g2", "mun_g2", "dep_g2", "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2", "sel_qtd_tec_graf", "sel_mat_tec_graf", "sel_area_graf", "sel_nome_curso_graf", "ms_tec_confirmado"]:
-                st.session_state.pop(chave, None)
+           for chave in ["ano_tec", "nre_tec", "mun_tec_sel_a3", "dep_tec", "loc_tec", "reg_tec", "cod_tec_sel_a3", "nome_tec_sel_a3", "nre_t_v2", "mun_t_v2", "dep_t_v2", "loc_t_v2", "cod_t_busca_v2", "nome_t_busca_v2", "sel_qtd_tec", "sel_mat_tec", "sel_area_inst", "sel_nome_curso_inst", "nre_g2", "mun_g2", "dep_g2", "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2", "sel_qtd_tec_graf", "sel_mat_tec_graf", "sel_area_graf", "sel_nome_curso_graf", "ms_tec_confirmado"]:
                 for k in list(st.session_state.keys()):
                     if k.startswith(f"cb_{chave}"):
                         st.session_state.pop(k, None)
@@ -1739,6 +1738,7 @@ with aba_tecnicos:
         cur_mun_p3 = st.session_state.get("mun_tec_sel_a3", "Todas")
         cur_dep_p3 = st.session_state.get("dep_tec", [])
         cur_loc_p3 = st.session_state.get("loc_tec", "Todas")
+        cur_reg_p3 = st.session_state.get("reg_tec", "Todas")
 
         if "last_nre_tec" not in st.session_state:
             st.session_state["last_nre_tec"] = cur_nre_p3
@@ -1747,22 +1747,52 @@ with aba_tecnicos:
             st.session_state["last_nre_tec"] = cur_nre_p3
             st.rerun()
 
-        op_nre_p3, op_mun_p3, op_dep_p3, op_loc_p3, _, _, _ = get_opcoes_cruzadas_completas(
-            df_tec_ano, nre_sel=cur_nre_p3, mun_sel=cur_mun_p3, dep_sel=cur_dep_p3, loc_sel=cur_loc_p3
+        op_nre_p3, op_mun_p3, op_dep_p3, op_loc_p3, _, _, op_reg_p3 = get_opcoes_cruzadas_completas(
+            df_tec_ano,
+            nre_sel=cur_nre_p3,
+            mun_sel=cur_mun_p3,
+            dep_sel=cur_dep_p3,
+            loc_sel=cur_loc_p3,
+            regular_sel=cur_reg_p3
         )
 
         st.markdown("##### Localização e Identificação da Escola")
-        t1, t2, t3, t4, t5 = st.columns([2, 2, 2, 1.5, 2])
+
+        t1, t2, t3, t4, t5, t6 = st.columns([2, 2, 2, 1.5, 2, 2])
+
         with t1:
-            nre_tec = criar_filtro_selectbox("Núcleo Regional", op_nre_p3, "nre_tec", "Todas")
+            nre_tec = criar_filtro_selectbox(
+                "Núcleo Regional", op_nre_p3, "nre_tec", "Todas"
+            )
+
         with t2:
-            mun_tec = criar_filtro_selectbox("Município", op_mun_p3, "mun_tec_sel_a3", "Todas")
+            mun_tec = criar_filtro_selectbox(
+                "Município", op_mun_p3, "mun_tec_sel_a3", "Todas"
+            )
+
         with t3:
-            loc_tec = criar_filtro_selectbox("Localização", op_loc_p3, "loc_tec", "Todas")
+            loc_tec = criar_filtro_selectbox(
+                "Localização", op_loc_p3, "loc_tec", "Todas"
+            )
+
         with t4:
-            ano_tec = criar_filtro_checkboxes("Ano(s) do Censo", ANOS_TECNICOS_DIC, "ano_tec", valor_padrao=["2025"])
+            ano_tec = criar_filtro_checkboxes(
+                "Ano(s) do Censo", ANOS_TECNICOS_DIC,
+                "ano_tec", valor_padrao=["2025"]
+            )
+
         with t5:
-            dep_tec = criar_filtro_checkboxes("Rede", op_dep_p3, "dep_tec")
+            dep_tec = criar_filtro_checkboxes(
+                "Rede", op_dep_p3, "dep_tec"
+            )
+
+        with t6:
+            reg_tec = criar_filtro_selectbox(
+                "Escola Parceira",
+                ["Todas"] + op_reg_p3,
+                "reg_tec",
+                "Todas"
+            )
 
     where_tec = []
     if ano_tec:
@@ -1778,7 +1808,17 @@ with aba_tecnicos:
         loc_id_t = int(loc_tec.split(' - ')[0])
         where_tec.append(f"{sql_int_safe('TP_LOCALIZACAO')} = {loc_id_t}")
 
-    sql_tecnicos = f"SELECT * FROM df_tecnicos_raw" + (" WHERE " + " AND ".join(where_tec) if where_tec else "")
+    # Filtro Escola Parceira
+    if reg_tec and reg_tec not in ["Todas", "Todos"]:
+        reg_id_t = int(str(reg_tec).split(" - ")[0])
+        where_tec.append(
+            f"{sql_int_safe('IN_PODER_PUBLICO_PARCERIA')} = {reg_id_t}"
+        )
+
+    sql_tecnicos = (
+        f"SELECT * FROM df_tecnicos_raw"
+        + (" WHERE " + " AND ".join(where_tec) if where_tec else "")
+    )
 
     try:
         con = duckdb.connect()
