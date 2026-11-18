@@ -1107,7 +1107,7 @@ with aba_escolas:
             df_esc_ano, nre_sel=cur_nre_p1, mun_sel=cur_mun_p1, dep_sel=cur_dep_p1, loc_sel=cur_loc_p1
         )
 
-                colunas_escolas = obter_colunas_parquet(CAMINHO_ESCOLAS_PARQUET)
+        colunas_escolas = obter_colunas_parquet(CAMINHO_ESCOLAS_PARQUET)
 
         st.markdown("##### Localização e Identificação da Escola")
 
