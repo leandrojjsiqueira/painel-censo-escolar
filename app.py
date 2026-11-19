@@ -317,7 +317,32 @@ def construir_opcoes_metricas_qt(colunas_df):
     grupos = {nome: {} for nome in GRUPOS_METRICAS_QT}
     inventario = []
 
-    for sufixo in sorted(sufixos):
+    ordem_faixa_etaria = {
+        "BAS_0_3": 1,
+        "BAS_0_3_REF_31_03": 2,
+        "BAS_4_5": 3,
+        "BAS_4_5_REF_31_03": 4,
+        "BAS_6_10": 5,
+        "BAS_6_10_REF_31_03": 6,
+        "BAS_11_14": 7,
+        "BAS_11_14_REF_31_03": 8,
+        "BAS_15_17": 9,
+        "BAS_15_17_REF_31_03": 10,
+        "BAS_18_MAIS": 11,
+        "BAS_18_MAIS_REF_31_03": 12
+    }
+
+    sufixos_ordenados = sorted(
+        sufixos,
+        key=lambda s: (
+            0 if categorias_metrica_qt(s) == "Faixa Etária" else 1,
+            ordem_faixa_etaria.get(s, 999)
+            if categorias_metrica_qt(s) == "Faixa Etária" else 0,
+            s
+        )
+    )
+
+    for sufixo in sufixos_ordenados:
         col_mat = f"QT_MAT_{sufixo}"
         col_tur = f"QT_TUR_{sufixo}"
         tem_mat = col_mat in colunas
