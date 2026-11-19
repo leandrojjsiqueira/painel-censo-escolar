@@ -2296,7 +2296,7 @@ with aba_tecnicos:
                             step_tec = span_tec / 4.0 if span_tec > 0 else 1.0
                             min_v_tec = max(0.0, raw_min_tec - step_tec) # Trava o mínimo em 0 no mínimo
                             max_v_tec = raw_max_tec + step_tec
-                            dtick_mat = max(1, math.ceil((max_v_tec - min_v_tec) / 6.0))
+                            dtick_tec = max(1, math.ceil((max_v_tec - min_v_tec) / 6.0))
                           
 
                             fig_tec = px.line(
