@@ -1303,7 +1303,7 @@ with aba_escolas:
                 with t_fc3: 
                     loc_t_sel = criar_filtro_selectbox("Localização", op_loc_t1, "loc_t_v1", "Todas")
                 with t_fc4: 
-                    cod_t_sel = criar_filtro_selectbox("Código INEP", op_cod_t1, "cod_t_busca_v1", "Todos")
+                    cod_t_sel = criar_filtro_selectbox("Código INEP (MEC)", op_cod_t1, "cod_t_busca_v1", "Todos")
                 with t_fc5: 
                     nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas", on_change=selecionar_inep_pelo_nome,args=(df_escolas_meta, "nome_t_busca_v1", "cod_t_busca_v1", "Todas"))
                 with t_fc6: 
@@ -1512,7 +1512,7 @@ with aba_escolas:
                 with g_c3: 
                     loc_esc_graf = criar_filtro_selectbox("Localização", op_loc_g1, "loc_g1", "Todas")
                 with g_c4: 
-                    cod_esc_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g1, "cod_esc_sel_g1", "Todos")
+                    cod_esc_sel_g = criar_filtro_selectbox("Código INEP (MEC)", op_cod_g1, "cod_esc_sel_g1", "Todos")
                 with g_c5: 
                     nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_escolas_meta, "nome_esc_sel_g1", "cod_esc_sel_g1", "Todas"))
                 with g_c6: 
@@ -1955,7 +1955,7 @@ with aba_tecnicos:
                 with t_tc3: 
                     loc_t_sel_tec = criar_filtro_selectbox("Localização", op_loc_tt, "loc_t_v2", "Todas")
                 with t_tc4: 
-                    cod_t_sel_tec = criar_filtro_selectbox("Código INEP", op_cod_tt, "cod_t_busca_v2", "Todos")
+                    cod_t_sel_tec = criar_filtro_selectbox("Código INEP (MEC)", op_cod_tt, "cod_t_busca_v2", "Todos")
                 with t_tc5: 
                     nome_t_sel_tec = criar_filtro_selectbox("Nome da Escola", op_nome_tt, "nome_t_busca_v2", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_tecnicos, "nome_t_busca_v2", "cod_t_busca_v2", "Todas"))
                 with t_tc6: 
@@ -2206,7 +2206,7 @@ with aba_tecnicos:
                 with g_t3: 
                     loc_tec_graf = criar_filtro_selectbox("Localização", op_loc_g2, "loc_g2", "Todas")
                 with g_t4: 
-                    cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
+                    cod_tec_sel_g = criar_filtro_selectbox("Código INEP (MEC)", op_cod_g2, "cod_tec_busca_g2", "Todos")
                 with g_t5: 
                     nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_tecnicos, "nome_tec_busca_g2", "cod_tec_busca_g2", "Todas"))
                 with g_t6: 
