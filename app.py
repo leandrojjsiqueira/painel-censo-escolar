@@ -516,17 +516,62 @@ def criar_filtro_checkboxes(titulo, opcoes, chave, default=None, valor_padrao=No
         st.session_state[estado_chave] = novos_selecionados
 
     return st.session_state[estado_chave]
+  
+def selecionar_inep_pelo_nome(df, chave_nome, chave_codigo, nome_padrao="Todas"):
 
-def criar_filtro_selectbox(titulo, opcoes, key, valor_padrao="Todas"):
+    nome_escolhido = st.session_state.get(chave_nome, nome_padrao)
+
+    if nome_escolhido in [None, "", "Todas", "Todos"]:
+        return
+
+    if "NO_ENTIDADE" not in df.columns or "CO_ENTIDADE" not in df.columns:
+        return
+
+    correspondencias = df.loc[
+        df["NO_ENTIDADE"].astype(str).str.strip() == str(nome_escolhido).strip(),
+        "CO_ENTIDADE"
+    ]
+
+    codigos = (
+        correspondencias.dropna()
+        .astype(str)
+        .str.split(".").str[0].str.strip()
+    )
+
+    if not codigos.empty:
+        st.session_state[chave_codigo] = codigos.iloc[0]
+
+    # Limpa o nome, pois a consulta passa a utilizar o INEP
+    st.session_state[chave_nome] = nome_padrao
+
+def criar_filtro_selectbox(
+    titulo,
+    opcoes,
+    key,
+    valor_padrao="Todas",
+    on_change=None,
+    args=None
+):
     opcoes = list(opcoes)
+
     if not opcoes:
         opcoes = [valor_padrao]
+
     valor_atual = st.session_state.get(key, valor_padrao)
+
     if valor_atual not in opcoes:
         valor_atual = valor_padrao if valor_padrao in opcoes else opcoes[0]
         st.session_state[key] = valor_atual
-    return st.selectbox(titulo, options=opcoes, index=opcoes.index(valor_atual), key=key, help=f"Selecione uma opção ou '{valor_padrao}' para incluir todos")
 
+    return st.selectbox(
+        titulo,
+        options=opcoes,
+        index=opcoes.index(valor_atual),
+        key=key,
+        on_change=on_change,
+        args=args,
+        help=f"Selecione uma opção ou '{valor_padrao}' para incluir todos"
+    )
 def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=None, loc_sel=None, cod_sel=None, nome_sel=None, regular_sel=None):
     nre_ativo = nre_sel if nre_sel not in [None, "", "Todas", "Todos"] else None
     dep_sel = list(dep_sel or [])
@@ -1235,7 +1280,7 @@ with aba_escolas:
                 with t_fc4: 
                     cod_t_sel = criar_filtro_selectbox("Código INEP", op_cod_t1, "cod_t_busca_v1", "Todos")
                 with t_fc5: 
-                    nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas")
+                    nome_t_sel = criar_filtro_selectbox("Nome da Escola", op_nome_t1, "nome_t_busca_v1", "Todas", on_change=selecionar_inep_pelo_nome,args=(df_escolas_meta, "nome_t_busca_v1", "cod_t_busca_v1", "Todas"))
                 with t_fc6: 
                     reg_t_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_t1, "reg_t_v1", "Todas")
                 with t_fc7: 
@@ -1444,7 +1489,7 @@ with aba_escolas:
                 with g_c4: 
                     cod_esc_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g1, "cod_esc_sel_g1", "Todos")
                 with g_c5: 
-                    nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas")
+                    nome_esc_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g1, "nome_esc_sel_g1", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_escolas_meta, "nome_esc_sel_g1", "cod_esc_sel_g1", "Todas"))
                 with g_c6: 
                     reg_g_sel = criar_filtro_selectbox("Escolas Parceiras", op_reg_g1, "poder_g_v1", "Todas")
                 with g_c7: 
@@ -1887,7 +1932,7 @@ with aba_tecnicos:
                 with t_tc4: 
                     cod_t_sel_tec = criar_filtro_selectbox("Código INEP", op_cod_tt, "cod_t_busca_v2", "Todos")
                 with t_tc5: 
-                    nome_t_sel_tec = criar_filtro_selectbox("Nome da Escola", op_nome_tt, "nome_t_busca_v2", "Todas")
+                    nome_t_sel_tec = criar_filtro_selectbox("Nome da Escola", op_nome_tt, "nome_t_busca_v2", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_tecnicos, "nome_t_busca_v2", "cod_t_busca_v2", "Todas"))
                 with t_tc6: 
                     dep_t_sel_tec = criar_filtro_checkboxes("Rede", op_dep_tt, "dep_t_v2")
 
@@ -2138,7 +2183,7 @@ with aba_tecnicos:
                 with g_t4: 
                     cod_tec_sel_g = criar_filtro_selectbox("Código INEP", op_cod_g2, "cod_tec_busca_g2", "Todos")
                 with g_t5: 
-                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas")
+                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_tecnicos, "nome_tec_busca_g2", "cod_tec_busca_g2", "Todas"))
                 with g_t6: 
                     dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
 
