@@ -2425,17 +2425,7 @@ with aba_obs:
     with st.container(border=True):
         st.markdown("### 6. Contabilização de Outras Métricas")
         st.write("Esta plataforma exibe resultados consolidados e gráficos sobre matrículas, turmas e cursos. Para a realização de análises avançadas ou cálculo de outros quantitativos específicos, é disponibilizado ao final de cada aba um arquivo em formato Excel (.xlsx) para download completo dos dados filtrados.")
-    
-    with st.container(border=True):
-        st.markdown("### 7. Identificação da Escola pelo Código INEP")
-        st.write(
-            "Ao localizar uma escola pelo nome, verifique seu respectivo Código INEP (Código MEC). "
-            "Em seguida, selecione esse código no filtro 'Código INEP' e mantenha a opção 'Todas' "
-            "no filtro 'Nome da Escola'. Essa orientação é importante porque uma mesma escola "
-            "pode apresentar denominações diferentes ao longo dos anos, mantendo o mesmo código INEP. "
-            "⚠️ A utilização do nome da escola como único critério de busca pode resultar em totais "
-            "zerados para determinados anos, caso a denominação tenha sido alterada."
-        )
+
 # =============================================================================
 # ABA 4 - DICIONÁRIO DE DADOS (3 COLUNAS)
 # =============================================================================
