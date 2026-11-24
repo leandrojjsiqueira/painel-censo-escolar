@@ -853,7 +853,7 @@ def criar_filtro_escola_possui(colunas_disponiveis, chave="filtro_in_a1"):
         if cb_k not in st.session_state:
             st.session_state[cb_k] = coluna in selecionadas
 
-    with st.popover("Escola possui?"):
+    with st.popover("Escola possui"):
 
         st.markdown("**1. Selecione os valores:**")
 
