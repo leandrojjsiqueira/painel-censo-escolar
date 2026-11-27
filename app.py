@@ -458,9 +458,58 @@ ANOS_TECNICOS_DIC = {str(a): str(a) for a in range(2023, 2026)}
 # FUNÇÕES AUXILIARES
 # =============================================================================
 
-def fmt_num(valor):
-    if valor is None or pd.isna(valor): return "0"
+def fmt_num(valor, vazio="-"):
+    if valor is None or pd.isna(valor):
+        return vazio
     return f"{int(valor):,}".replace(",", ".")
+
+def calcular_soma_segura(df, coluna_principal, colunas_fallback=None):
+    if df.empty:
+        return None
+
+    col_upper = coluna_principal.upper()
+    tem_dado_principal = False
+    total_principal = 0.0
+
+    if col_upper in df.columns:
+        serie = pd.to_numeric(
+            df[col_upper].astype(str)
+            .str.replace(',', '.')
+            .str.extract(r'(\d+\.?\d*)')[0],
+            errors='coerce'
+        )
+        if serie.notna().any():
+            tem_dado_principal = True
+            total_principal = float(serie.sum())
+            if total_principal > 0:
+                return total_principal
+
+    if colunas_fallback:
+        total_fallback = 0.0
+        encontrou_coluna = False
+
+        for col in colunas_fallback:
+            c_upper = col.upper()
+
+            if c_upper in df.columns:
+                s = pd.to_numeric(
+                    df[c_upper].astype(str)
+                    .str.replace(',', '.')
+                    .str.extract(r'(\d+\.?\d*)')[0],
+                    errors='coerce'
+                )
+                if s.notna().any():
+                    soma_col = float(s.sum())
+                    encontrou_coluna = True
+                    if soma_col > 0:
+                        total_fallback += soma_col
+
+        if encontrou_coluna and total_fallback > 0:
+            return total_fallback
+        if tem_dado_principal or encontrou_coluna:
+            return 0.0
+
+    return total_principal if tem_dado_principal else None
 
 def formatar_anos(lista_anos):
     if not lista_anos:
@@ -597,6 +646,7 @@ def criar_filtro_selectbox(
         args=args,
         help=f"Selecione uma opção ou '{valor_padrao}' para incluir todos"
     )
+
 def get_opcoes_cruzadas_completas(df_in, nre_sel=None, mun_sel=None, dep_sel=None, loc_sel=None, cod_sel=None, nome_sel=None, regular_sel=None):
     nre_ativo = nre_sel if nre_sel not in [None, "", "Todas", "Todos"] else None
     dep_sel = list(dep_sel or [])
@@ -666,28 +716,6 @@ def extrair_chaves_por_rotulos(rotulos, dic):
     if not rotulos: return []
     inv_map = {v: k for k, v in dic.items()}
     return [inv_map.get(r) for r in rotulos if r in inv_map]
-
-def calcular_soma_segura(df, coluna_principal, colunas_fallback=None):
-    if df.empty: return 0
-    col_upper = coluna_principal.upper()
-    if col_upper in df.columns:
-        serie = pd.to_numeric(df[col_upper].astype(str).str.replace(',', '.').str.extract(r'(\d+\.?\d*)')[0], errors='coerce').fillna(0)
-        total = serie.sum()
-        if total > 0: return total
-    if colunas_fallback:
-        total_fallback = 0
-        encontrou_coluna = False
-        for col in colunas_fallback:
-            c_upper = col.upper()
-            if c_upper in df.columns:
-                s = pd.to_numeric(df[c_upper].astype(str).str.replace(',', '.').str.extract(r'(\d+\.?\d*)')[0], errors='coerce').fillna(0)
-                soma_col = s.sum()
-                if soma_col > 0:
-                    total_fallback += soma_col
-                    encontrou_coluna = True
-        if encontrou_coluna and total_fallback > 0:
-            return total_fallback
-    return 0
 
 def limpar_dataframe_para_excel(df):
     df_limpo = df.copy()
@@ -810,6 +838,7 @@ def montar_where_escolas(where_base="", anos=None, nre=None, municipio=None,
         condicoes.append(f"{sql_int_safe('IN_PODER_PUBLICO_PARCERIA')} = {pod_id}")
 
     return " AND ".join(condicoes)
+
 OPCOES_ESCOLA_POSSUI = [
     "1 - Sim",
     "0 - Não",
@@ -959,6 +988,7 @@ def montar_sql_escola_possui(colunas_in, valores):
         f"({' OR '.join(condicoes_variaveis)})"
         if condicoes_variaveis else ""
     )
+
 def consultar_contagens_escolas(caminho_parquet, where_clause):
     con = duckdb.connect()
     try:
@@ -980,8 +1010,10 @@ def consultar_somas_metricas_parquet(caminho_parquet, where_clause, colunas):
     if not colunas:
         return {}
 
+    # Sem COALESCE: se tudo for NULL/vazio no ano, o SUM retorna NULL (None)
+    # Se houver zeros preenchidos, o SUM retorna 0.0
     expressoes = [
-        f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
+        f"SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)) AS {identificador_sql(col)}"
         for col in colunas
     ]
     sql = (
@@ -994,7 +1026,12 @@ def consultar_somas_metricas_parquet(caminho_parquet, where_clause, colunas):
     con = duckdb.connect()
     try:
         linha = con.execute(sql).fetchone()
-        return {col: (linha[i] or 0) for i, col in enumerate(colunas)}
+        if not linha:
+            return {col: None for col in colunas}
+        return {
+            col: (None if pd.isna(linha[i]) else float(linha[i]))
+            for i, col in enumerate(colunas)
+        }
     finally:
         con.close()
 
@@ -1005,7 +1042,7 @@ def consultar_evolucao_metricas_lotes(caminho_parquet, where_base, anos,
         return pd.DataFrame(columns=["ANO", "Matrículas", "Turmas"])
 
     expressoes = [
-        f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
+        f"SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)) AS {identificador_sql(col)}"
         for col in colunas_soma
     ]
     registros = []
@@ -1023,12 +1060,12 @@ def consultar_evolucao_metricas_lotes(caminho_parquet, where_base, anos,
             """
             resultado_lote = con.execute(sql).df()
             for _, linha in resultado_lote.iterrows():
-                valor_mat = sum(float(linha.get(c, 0) or 0) for c in (colunas_mat or []))
-                valor_tur = sum(float(linha.get(c, 0) or 0) for c in (colunas_tur or []))
+                vals_mat = [float(linha[c]) for c in (colunas_mat or []) if c in linha and pd.notna(linha[c])]
+                vals_tur = [float(linha[c]) for c in (colunas_tur or []) if c in linha and pd.notna(linha[c])]
                 registros.append({
                     "ANO": int(linha["ANO"]),
-                    "Matrículas": valor_mat,
-                    "Turmas": valor_tur,
+                    "Matrículas": sum(vals_mat) if vals_mat else None,
+                    "Turmas": sum(vals_tur) if vals_tur else None,
                 })
     finally:
         con.close()
@@ -1050,6 +1087,106 @@ def consultar_escolas_preview(caminho_parquet, where_clause, colunas, limite=100
         return df
     finally:
         con.close()
+
+@st.cache_data(show_spinner=False)
+def obter_anos_sem_variavel_parquet(caminho_parquet, data_modificacao, anos, colunas):
+    if not anos or not colunas:
+        return {}
+
+    colunas_unicas = list(dict.fromkeys(colunas))
+    anos_sql = ", ".join(str(int(a)) for a in anos)
+    expressoes = [
+        f"COUNT(CASE WHEN {identificador_sql(col)} IS NOT NULL "
+        f"AND TRIM(CAST({identificador_sql(col)} AS VARCHAR)) NOT IN ('', 'None', 'nan', 'NaN') "
+        f"THEN 1 END) AS {identificador_sql(col)}"
+        for col in colunas_unicas
+    ]
+    sql = f"""
+        SELECT {sql_int_safe('NU_ANO_CENSO')} AS ANO,
+               {', '.join(expressoes)}
+        FROM read_parquet('{caminho_parquet}')
+        WHERE {sql_int_safe('NU_ANO_CENSO')} IN ({anos_sql})
+        GROUP BY ANO
+    """
+    con = duckdb.connect()
+    try:
+        df_contagens = con.execute(sql).df()
+    finally:
+        con.close()
+
+    if df_contagens.empty:
+        return {}
+
+    mapa_vazio = {}
+    for col in colunas_unicas:
+        if col in df_contagens.columns:
+            anos_vazios = [
+                str(int(row["ANO"]))
+                for _, row in df_contagens.iterrows()
+                if pd.notna(row["ANO"]) and (row[col] or 0) == 0
+            ]
+            if anos_vazios:
+                mapa_vazio[col] = anos_vazios
+    return mapa_vazio
+
+def formatar_preview_anos_sem_variavel(df_preview, df_referencia=None, caminho_parquet=None, data_modificacao=None):
+    if df_preview.empty or "NU_ANO_CENSO" not in df_preview.columns:
+        return df_preview
+
+    df_out = df_preview.copy()
+    anos_preview = df_out["NU_ANO_CENSO"].astype(str).str.split(".").str[0].str.strip()
+    anos_unicos = anos_preview.unique().tolist()
+    colunas_ignorar = {
+        "NU_ANO_CENSO", "NO_REGIAO", "SG_UF", "CO_NRE", "NO_NRE",
+        "CO_MUNICIPIO", "NO_MUNICIPIO", "CO_ENTIDADE", "NO_ENTIDADE"
+    }
+    colunas_verificar = [c for c in df_out.columns if c not in colunas_ignorar]
+    if not colunas_verificar:
+        return df_out
+
+    if caminho_parquet is not None:
+        anos_numericos = sorted({a for a in anos_unicos if a.isdigit()})
+        if not anos_numericos:
+            return df_out
+        mapa_anos_sem_dado = obter_anos_sem_variavel_parquet(
+            caminho_parquet,
+            data_modificacao,
+            tuple(anos_numericos),
+            tuple(colunas_verificar)
+        )
+        for col, anos_sem_dado in mapa_anos_sem_dado.items():
+            mask_linhas = anos_preview.isin(anos_sem_dado)
+            if mask_linhas.any():
+                df_out[col] = df_out[col].astype(object)
+                df_out.loc[mask_linhas, col] = "-"
+        return df_out
+
+    if df_referencia is None or df_referencia.empty or "NU_ANO_CENSO" not in df_referencia.columns:
+        return df_preview
+
+    anos_ref = df_referencia["NU_ANO_CENSO"].astype(str).str.split(".").str[0].str.strip()
+    df_ref_filtrado = df_referencia.loc[anos_ref.isin(anos_unicos)]
+    if df_ref_filtrado.empty:
+        return df_out
+
+    anos_ref_filtrado = anos_ref.loc[df_ref_filtrado.index]
+
+    for col in colunas_verificar:
+        if col not in df_ref_filtrado.columns:
+            continue
+        serie_ref = df_ref_filtrado[col]
+        eh_vazio_ref = serie_ref.isna() | (serie_ref.astype(str).str.strip().isin(["", "None", "nan", "NaN"]))
+        anos_sem_dado = [
+            ano for ano, tudo_vazio in eh_vazio_ref.groupby(anos_ref_filtrado).all().items()
+            if tudo_vazio
+        ]
+        if anos_sem_dado:
+            mask_linhas = anos_preview.isin(anos_sem_dado)
+            if mask_linhas.any():
+                df_out[col] = df_out[col].astype(object)
+                df_out.loc[mask_linhas, col] = "-"
+
+    return df_out
 
 def exportar_escolas_excel_lotes(caminho_parquet, where_base, anos, colunas, tamanho_lote=3):
     from openpyxl import Workbook
@@ -1385,10 +1522,12 @@ with aba_escolas:
                         if not selecionados_grupo:
                             continue
                         linhas_totais = []
-                        total_matriculas = 0
-                        total_turmas = 0
+                        total_matriculas = 0.0
+                        total_turmas = 0.0
                         tem_coluna_mat_grupo = False
                         tem_coluna_tur_grupo = False
+                        tem_valor_mat_grupo = False
+                        tem_valor_tur_grupo = False
                         inv_map = {v: k for k, v in opcoes_grupo.items()}
 
                         for rotulo in selecionados_grupo:
@@ -1402,12 +1541,18 @@ with aba_escolas:
                             if not tem_mat and not tem_tur:
                                 continue
 
-                            valor_mat = totais_metricas.get(coluna_mat, 0) if tem_mat else 0
-                            valor_tur = totais_metricas.get(coluna_tur, 0) if tem_tur else 0
+                            valor_mat = totais_metricas.get(coluna_mat) if tem_mat else None
+                            valor_tur = totais_metricas.get(coluna_tur) if tem_tur else None
                             tem_coluna_mat_grupo = tem_coluna_mat_grupo or tem_mat
                             tem_coluna_tur_grupo = tem_coluna_tur_grupo or tem_tur
-                            total_matriculas += valor_mat
-                            total_turmas += valor_tur
+
+                            if valor_mat is not None:
+                                total_matriculas += valor_mat
+                                tem_valor_mat_grupo = True
+
+                            if valor_tur is not None:
+                                total_turmas += valor_tur
+                                tem_valor_tur_grupo = True
 
                             linhas_totais.append({
                                 "Seleção": rotulo,
@@ -1418,8 +1563,8 @@ with aba_escolas:
                         if linhas_totais:
                             linhas_totais.append({
                                 "Seleção": "TOTAL DO GRUPO",
-                                "Matrículas": fmt_num(total_matriculas) if tem_coluna_mat_grupo else "—",
-                                "Turmas": fmt_num(total_turmas) if tem_coluna_tur_grupo else "—"
+                                "Matrículas": (fmt_num(total_matriculas) if tem_valor_mat_grupo else "-") if tem_coluna_mat_grupo else "—",
+                                "Turmas": (fmt_num(total_turmas) if tem_valor_tur_grupo else "-") if tem_coluna_tur_grupo else "—"
                             })
 
                         dados_ano[titulo_grupo] = linhas_totais
@@ -1576,7 +1721,7 @@ with aba_escolas:
                             continue
 
                         expressoes = [
-                            f"COALESCE(SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)), 0) AS {identificador_sql(col)}"
+                            f"SUM(TRY_CAST({identificador_sql(col)} AS DOUBLE)) AS {identificador_sql(col)}"
                             for col in list(dict.fromkeys(colunas_mat_grupo + colunas_turma_grupo))
                         ]
                         
@@ -1598,17 +1743,19 @@ with aba_escolas:
                                     ano_val = int(linha["ANO"])
                                     for c_mat in colunas_mat_grupo:
                                         if c_mat in linha:
+                                            val = linha[c_mat]
                                             registros_agrupados.append({
                                                 'ANO': ano_val,
                                                 'Metrica': c_mat,
-                                                'Valor': float(linha[c_mat] or 0)
+                                                'Valor': None if pd.isna(val) else float(val)
                                             })
                                     for c_tur in colunas_turma_grupo:
                                         if c_tur in linha:
+                                            val = linha[c_tur]
                                             registros_agrupados.append({
                                                 'ANO': ano_val,
                                                 'Metrica': c_tur,
-                                                'Valor': float(linha[c_tur] or 0)
+                                                'Valor': None if pd.isna(val) else float(val)
                                             })
                         finally:
                             con.close()
@@ -1624,7 +1771,7 @@ with aba_escolas:
                             mapa_nomes_amigaveis[f"QT_TUR_{s}"] = f"{desc} (Turmas)"
 
                         df_agrupado['Metrica_Nome'] = df_agrupado['Metrica'].map(mapa_nomes_amigaveis).fillna(df_agrupado['Metrica'])
-                        df_agrupado['Valor_Fmt'] = df_agrupado['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                        df_agrupado['Valor_Fmt'] = df_agrupado['Valor'].apply(fmt_num)
 
                         cols_melt_mat = [c for c in colunas_mat_grupo if c in df_agrupado['Metrica'].values]
                         cols_melt_tur = [c for c in colunas_turma_grupo if c in df_agrupado['Metrica'].values]
@@ -1647,7 +1794,7 @@ with aba_escolas:
 
                         fig_mat, fig_tur = None, None
 
-                        if not df_mat.empty:
+                        if not df_mat.empty and df_mat['Valor'].notna().any():
                             raw_min_mat, raw_max_mat = df_mat['Valor'].min(), df_mat['Valor'].max()
                             if raw_max_mat == raw_min_mat:
                                 raw_max_mat = raw_min_mat + 10.0
@@ -1664,7 +1811,7 @@ with aba_escolas:
                             fig_mat.update_xaxes(type='category', fixedrange=True)
                             fig_mat.update_yaxes(tickformat=',.0f', range=[min_v_mat, max_v_mat], dtick=dtick_mat, fixedrange=True)
 
-                        if not df_tur.empty:
+                        if not df_tur.empty and df_tur['Valor'].notna().any():
                             raw_min_tur, raw_max_tur = df_tur['Valor'].min(), df_tur['Valor'].max()
                             if raw_max_tur == raw_min_tur:
                                 raw_max_tur = raw_min_tur + 10.0
@@ -1693,6 +1840,8 @@ with aba_escolas:
                             st.plotly_chart(fig_mat, use_container_width=True, config={'displayModeBar': False}, key=f"mat_{safe_key_suffix}")
                         elif fig_tur:
                             st.plotly_chart(fig_tur, use_container_width=True, config={'displayModeBar': False}, key=f"tur_{safe_key_suffix}")
+                        else:
+                            st.info(f"ℹ️ Sem dados registrados para **{titulo_grupo}** no período selecionado.")
 
                         st.markdown("---")
                 else:
@@ -1739,6 +1888,11 @@ with aba_escolas:
             )
 
             if not df_escolas_exibir.empty:
+                df_escolas_preview_tela = formatar_preview_anos_sem_variavel(
+                    df_escolas_exibir,
+                    caminho_parquet=CAMINHO_ESCOLAS_PARQUET,
+                    data_modificacao=DATA_MOD_ESCOLAS
+                )
                 assinatura_export = (
                     where_clause_filtros_escolas,
                     tuple(sorted(str(a) for a in (ano_esc or []))),
@@ -1752,7 +1906,7 @@ with aba_escolas:
                     f"💡 Apresenta as primeiras 1000 escolas. "
                     f"O botão abaixo prepara o Excel com todos os {fmt_num(qtd_registros_escolas)} registros."
                 )
-                st.dataframe(df_escolas_exibir, use_container_width=True, height=500)
+                st.dataframe(df_escolas_preview_tela, use_container_width=True, height=500)
 
                 if st.button("📄 Preparar arquivo Excel para download", key="btn_preparar_excel_escolas"):
                     with st.spinner("Preparando o arquivo para download..."):
@@ -1892,9 +2046,11 @@ with aba_tecnicos:
     if ano_tec:
         where_tec.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_tec)})")
     if nre_tec and nre_tec not in ["Todas", "Todos"] and "NO_NRE" in df_tecnicos_raw.columns:
-        where_tec.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_tec.replace('\'', '\'\'')}'")
+        valor_nre_tec = str(nre_tec).replace("'", "''")
+        where_tec.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{valor_nre_tec}'")
     if mun_tec and mun_tec not in ["Todas", "Todos"]:
-        where_tec.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_tec.replace('\'', '\'\'')}'")
+        valor_mun_tec = str(mun_tec).replace("'", "''")
+        where_tec.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{valor_mun_tec}'")
     if dep_tec:
         deps_t = [int(d.split(' - ')[0]) for d in dep_tec]
         where_tec.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps_t))})")
@@ -2035,7 +2191,8 @@ with aba_tecnicos:
                         dados_ano_tec = {}
                         for titulo_grupo, (selecionados_grupo, opcoes_grupo) in grupos_metricas_tec.items():
                             linhas_totais = []
-                            total_geral_grupo = 0
+                            total_geral_grupo = 0.0
+                            tem_valor_grupo = False
                             inv_map_tec = {v: k for k, v in opcoes_grupo.items()}
 
                             for rotulo in selecionados_grupo:
@@ -2044,7 +2201,9 @@ with aba_tecnicos:
                                     continue
                                 
                                 valor_metrica = calcular_soma_segura(df_ano_calc_tec, coluna_metrica)
-                                total_geral_grupo += valor_metrica
+                                if valor_metrica is not None:
+                                    total_geral_grupo += valor_metrica
+                                    tem_valor_grupo = True
 
                                 linhas_totais.append({
                                     "Seleção": rotulo,
@@ -2054,7 +2213,7 @@ with aba_tecnicos:
                             if linhas_totais:
                                 linhas_totais.append({
                                     "Seleção": "TOTAL DO GRUPO",
-                                    "Total": fmt_num(total_geral_grupo)
+                                    "Total": fmt_num(total_geral_grupo) if tem_valor_grupo else "-"
                                 })
 
                             dados_ano_tec[titulo_grupo] = linhas_totais
@@ -2108,7 +2267,8 @@ with aba_tecnicos:
                             col_alvo = col_dim1 if idx_dim == 0 else col_dim2
                             with col_alvo:
                                 linhas_dim = []
-                                tot_mat_dim = 0
+                                tot_mat_dim = 0.0
+                                tem_mat_dim = False
                                 tot_cur_dim = 0
 
                                 for item_sel in selecionados_dim:
@@ -2120,7 +2280,9 @@ with aba_tecnicos:
                                     v_mat = calcular_soma_segura(df_sub_item, "QT_MAT_CURSO_TEC")
                                     v_cur = len(df_sub_item) if not df_sub_item.empty else 0
 
-                                    tot_mat_dim += v_mat
+                                    if v_mat is not None:
+                                        tot_mat_dim += v_mat
+                                        tem_mat_dim = True
                                     tot_cur_dim += v_cur
 
                                     linhas_dim.append({
@@ -2134,7 +2296,7 @@ with aba_tecnicos:
                                     linhas_dim.append({
                                         "Ano": str(ano_totais_tec_vis),
                                         "Seleção": "TOTAL DO GRUPO",
-                                        "Matrículas (QT_MAT_CURSO_TEC)": fmt_num(tot_mat_dim),
+                                        "Matrículas (QT_MAT_CURSO_TEC)": fmt_num(tot_mat_dim) if tem_mat_dim else "-",
                                         "Quantidade de Cursos (QT_CURSO_TEC)": fmt_num(tot_cur_dim)
                                     })
 
@@ -2281,7 +2443,14 @@ with aba_tecnicos:
                         for ano_idx, df_sub in df_sub_grupo.groupby('ANO_INT'):
                             row_g = {'ANO': ano_idx}
                             for c in colunas_grupo:
-                                row_g[c] = float(df_sub[c].dropna().astype(str).str.replace(',', '.').astype(float).sum()) if c in df_sub.columns else 0.0
+                                if c in df_sub.columns:
+                                    serie_c = pd.to_numeric(
+                                        df_sub[c].dropna().astype(str).str.replace(',', '.'),
+                                        errors='coerce'
+                                    ).dropna()
+                                    row_g[c] = float(serie_c.sum()) if not serie_c.empty else None
+                                else:
+                                    row_g[c] = None
                             registros_agrupados.append(row_g)
 
                         df_agrupado = pd.DataFrame(registros_agrupados)
@@ -2298,7 +2467,11 @@ with aba_tecnicos:
                         if cols_melt_tec:
                             df_melt_tec = df_agrupado.melt(id_vars=['ANO'], value_vars=cols_melt_tec, var_name='Metrica', value_name='Valor')
                             df_melt_tec['Metrica_Nome'] = df_melt_tec['Metrica'].map(mapa_nomes_tec).fillna(df_melt_tec['Metrica'])
-                            df_melt_tec['Valor_Fmt'] = df_melt_tec['Valor'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                            df_melt_tec['Valor_Fmt'] = df_melt_tec['Valor'].apply(fmt_num)
+
+                            if not df_melt_tec['Valor'].notna().any():
+                                st.info(f"ℹ️ Sem dados registrados para **{titulo_grupo}** no período selecionado.")
+                                continue
 
                             st.markdown(f"### {titulo_grupo}")
                             
@@ -2322,7 +2495,6 @@ with aba_tecnicos:
                             min_v_tec = max(0.0, raw_min_tec - step_tec) # Trava o mínimo em 0 no mínimo
                             max_v_tec = raw_max_tec + step_tec
                             dtick_tec = max(1, math.ceil((max_v_tec - min_v_tec) / 6.0))
-                          
 
                             fig_tec = px.line(
                                 df_melt_tec,
@@ -2382,9 +2554,13 @@ with aba_tecnicos:
             df_tecnicos_exibir = df_tecnicos[cols_finais_validas_tec] if not df_tecnicos.empty and cols_finais_validas_tec else df_tecnicos
             
             if not df_tecnicos_exibir.empty:
+                df_tecnicos_preview_tela = formatar_preview_anos_sem_variavel(
+                    df_tecnicos_exibir.head(1000),
+                    df_tecnicos_raw
+                )
                 excel_tecnicos_bytes = converter_df_para_excel(df_tecnicos_exibir)
                 st.info(f"💡 Apresenta os primeiros 1000 cursos. O botão de download exporta todos os {fmt_num(len(df_tecnicos_exibir))} registros.")
-                st.dataframe(df_tecnicos_exibir.head(1000), use_container_width=True, height=500)
+                st.dataframe(df_tecnicos_preview_tela, use_container_width=True, height=500)
                 st.download_button(
                     "📥 Baixar Cursos Excel (.xlsx)", 
                     data=excel_tecnicos_bytes, 
