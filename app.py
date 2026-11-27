@@ -1972,6 +1972,56 @@ def exportar_tecnicos_excel_lotes(df, colunas):
 
     return saida.getvalue()
 
+
+def obter_opcoes_area_curso(df, chave_area, chave_curso):
+    """Monta listas dependentes: área limita cursos e curso limita áreas."""
+    col_area = "NO_AREA_CURSO_PROFISSIONAL"
+    col_curso = "NO_CURSO_EDUC_PROFISSIONAL"
+
+    area_atual = st.session_state.get(chave_area, "Todas")
+    curso_atual = st.session_state.get(chave_curso, "Todas")
+
+    # Evita manter uma combinação antiga/inexistente após mudança da base ou filtros.
+    if (
+        area_atual not in [None, "", "Todas", "Todos"]
+        and curso_atual not in [None, "", "Todas", "Todos"]
+        and col_area in df.columns
+        and col_curso in df.columns
+    ):
+        combinacao = df[
+            (df[col_area].astype(str).str.strip() == str(area_atual).strip())
+            & (df[col_curso].astype(str).str.strip() == str(curso_atual).strip())
+        ]
+        if combinacao.empty:
+            curso_atual = "Todas"
+            st.session_state[chave_curso] = "Todas"
+
+    df_areas = df
+    if curso_atual not in [None, "", "Todas", "Todos"] and col_curso in df.columns:
+        df_areas = df[
+            df[col_curso].astype(str).str.strip() == str(curso_atual).strip()
+        ]
+
+    df_cursos = df
+    if area_atual not in [None, "", "Todas", "Todos"] and col_area in df.columns:
+        df_cursos = df[
+            df[col_area].astype(str).str.strip() == str(area_atual).strip()
+        ]
+
+    op_areas = ["Todas"]
+    if col_area in df_areas.columns:
+        op_areas += sorted(
+            df_areas[col_area].dropna().astype(str).str.strip().unique().tolist()
+        )
+
+    op_cursos = ["Todas"]
+    if col_curso in df_cursos.columns:
+        op_cursos += sorted(
+            df_cursos[col_curso].dropna().astype(str).str.strip().unique().tolist()
+        )
+
+    return op_areas, op_cursos
+
 with aba_tecnicos:
     with st.expander("📶 **Painel de Filtros - Cursos Técnicos**", expanded=True):
         if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3"):
@@ -2170,13 +2220,20 @@ with aba_tecnicos:
                 st.markdown("##### Descrição do Curso")
                 d_col1, d_col2 = st.columns(2)
                 
-                op_areas_tec = ["Todas"] + sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
-                op_nomes_cursos_tec = ["Todas"] + sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
+                op_areas_tec, op_nomes_cursos_tec = obter_opcoes_area_curso(
+                    df_tecnicos, "sel_area_inst", "sel_nome_curso_inst"
+                )
 
-                with d_col1: 
-                    sel_area_inst = criar_filtro_selectbox("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", op_areas_tec, "sel_area_inst", "Todas")
-                with d_col2: 
-                    sel_nome_curso_inst = criar_filtro_selectbox("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", op_nomes_cursos_tec, "sel_nome_curso_inst", "Todas")
+                with d_col1:
+                    sel_area_inst = criar_filtro_selectbox(
+                        "Área do Curso (NO_AREA_CURSO_PROFISSIONAL)",
+                        op_areas_tec, "sel_area_inst", "Todas"
+                    )
+                with d_col2:
+                    sel_nome_curso_inst = criar_filtro_selectbox(
+                        "Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)",
+                        op_nomes_cursos_tec, "sel_nome_curso_inst", "Todas"
+                    )
 
                 st.markdown("---")
                 st.markdown("##### Selecione as métricas que deseja exibir nas tabelas abaixo:")
@@ -2188,9 +2245,10 @@ with aba_tecnicos:
                     sel_mat_tec = criar_seletor_metricas("Quantidade de Matrículas", OPCOES_CURSOS_MAT, "sel_mat_tec_t1")
 
                 tem_metricas_gerais = bool(sel_qtd_tec or sel_mat_tec)
-                tem_dimensoes_especificas = bool(sel_area_inst != "Todas" or sel_nome_curso_inst != "Todas")
 
-                if tem_metricas_gerais or tem_dimensoes_especificas:
+                # Área e Nome do Curso são filtros: sozinhos não disparam cálculos.
+                # Os totais só são calculados quando ao menos uma métrica é selecionada.
+                if tem_metricas_gerais:
                     df_vis_tec_dinamica = df_tecnicos.copy()
                     if nre_t_sel_tec and nre_t_sel_tec not in ["Todas", "Todos"] and "NO_NRE" in df_vis_tec_dinamica.columns:
                         df_vis_tec_dinamica = df_vis_tec_dinamica[df_vis_tec_dinamica["NO_NRE"].astype(str).str.strip() == nre_t_sel_tec]
@@ -2286,75 +2344,8 @@ with aba_tecnicos:
                                             key=f"dl_exp_{safe_file_name_tec}"
                                         )
 
-                    dimensoes_para_exibir = []
-                    if sel_area_inst != "Todas":
-                        dimensoes_para_exibir.append(("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", "NO_AREA_CURSO_PROFISSIONAL", [sel_area_inst]))
-                    if sel_nome_curso_inst != "Todas":
-                        dimensoes_para_exibir.append(("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", "NO_CURSO_EDUC_PROFISSIONAL", [sel_nome_curso_inst]))
-
-                    if dimensoes_para_exibir:
-                        st.markdown("---")
-                        col_dim1, col_dim2 = st.columns(len(dimensoes_para_exibir))
-
-                        for idx_dim, (titulo_dim, col_dim, selecionados_dim) in enumerate(dimensoes_para_exibir):
-                            col_alvo = col_dim1 if idx_dim == 0 else col_dim2
-                            with col_alvo:
-                                linhas_dim = []
-                                tot_mat_dim = 0.0
-                                tem_mat_dim = False
-                                tot_cur_dim = 0
-
-                                for item_sel in selecionados_dim:
-                                    if col_dim in df_ano_calc_tec.columns:
-                                        df_sub_item = df_ano_calc_tec[df_ano_calc_tec[col_dim].astype(str).str.strip() == item_sel]
-                                    else:
-                                        df_sub_item = pd.DataFrame()
-
-                                    v_mat = calcular_soma_segura(df_sub_item, "QT_MAT_CURSO_TEC")
-                                    v_cur = len(df_sub_item) if not df_sub_item.empty else 0
-
-                                    if v_mat is not None:
-                                        tot_mat_dim += v_mat
-                                        tem_mat_dim = True
-                                    tot_cur_dim += v_cur
-
-                                    linhas_dim.append({
-                                        "Ano": str(ano_totais_tec_vis),
-                                        "Seleção": item_sel,
-                                        "Matrículas (QT_MAT_CURSO_TEC)": fmt_num(v_mat),
-                                        "Quantidade de Cursos (QT_CURSO_TEC)": fmt_num(v_cur)
-                                    })
-
-                                if linhas_dim:
-                                    linhas_dim.append({
-                                        "Ano": str(ano_totais_tec_vis),
-                                        "Seleção": "TOTAL DO GRUPO",
-                                        "Matrículas (QT_MAT_CURSO_TEC)": fmt_num(tot_mat_dim) if tem_mat_dim else "-",
-                                        "Quantidade de Cursos (QT_CURSO_TEC)": fmt_num(tot_cur_dim)
-                                    })
-
-                                    df_resumo_dim = pd.DataFrame(linhas_dim)
-
-                                    with st.container(border=True):
-                                        st.markdown(f"#### {titulo_dim}")
-                                        st.dataframe(
-                                            df_resumo_dim,
-                                            use_container_width=True,
-                                            hide_index=True,
-                                            height=min(120 + len(df_resumo_dim) * 38, 430)
-                                        )
-
-                                        excel_bytes_dim = converter_df_para_excel(df_resumo_dim)
-                                        safe_file_dim = col_dim.lower()
-                                        st.download_button(
-                                            f"📥 Baixar Resumo Excel (.xlsx)",
-                                            data=excel_bytes_dim,
-                                            file_name=f"resumo_{safe_file_dim}.xlsx",
-                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                            key=f"dl_exp_dim_{safe_file_dim}"
-                                        )
                 else:
-                    st.info("ℹ️ Selecione ao menos uma opção acima em um dos grupos para visualizar as tabelas de totais.")
+                    st.info("ℹ️ Selecione ao menos uma métrica acima para exibir as tabelas de totais. Área e Nome do Curso funcionam apenas como filtros.")
 
             mostrar_tabelas_tecnicos_por_ano_fragmento()
 
@@ -2410,13 +2401,20 @@ with aba_tecnicos:
                 st.markdown("##### Descrição do Curso")
                 gd1, gd2 = st.columns(2)
                 
-                op_areas_graf = ["Todas"] + sorted(df_tecnicos["NO_AREA_CURSO_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_AREA_CURSO_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
-                op_nomes_graf = ["Todas"] + sorted(df_tecnicos["NO_CURSO_EDUC_PROFISSIONAL"].dropna().astype(str).str.strip().unique()) if "NO_CURSO_EDUC_PROFISSIONAL" in df_tecnicos.columns else ["Todas"]
+                op_areas_graf, op_nomes_graf = obter_opcoes_area_curso(
+                    df_tecnicos, "sel_area_graf", "sel_nome_curso_graf"
+                )
 
-                with gd1: 
-                    sel_area_graf = criar_filtro_selectbox("Área do Curso (NO_AREA_CURSO_PROFISSIONAL)", op_areas_graf, "sel_area_graf", "Todas")
-                with gd2: 
-                    sel_nome_curso_graf = criar_filtro_selectbox("Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)", op_nomes_graf, "sel_nome_curso_graf", "Todas")
+                with gd1:
+                    sel_area_graf = criar_filtro_selectbox(
+                        "Área do Curso (NO_AREA_CURSO_PROFISSIONAL)",
+                        op_areas_graf, "sel_area_graf", "Todas"
+                    )
+                with gd2:
+                    sel_nome_curso_graf = criar_filtro_selectbox(
+                        "Nome do Curso (NO_CURSO_EDUC_PROFISSIONAL)",
+                        op_nomes_graf, "sel_nome_curso_graf", "Todas"
+                    )
 
                 st.markdown("##### Métrica Específica para o Gráfico")
                 
@@ -2630,9 +2628,7 @@ with aba_tecnicos:
 
     except Exception as e:
         st.error(f"Erro: {e}")
-
-
-
+      
 # =============================================================================
 # ABA 3 - OBSERVAÇÕES E LIMITAÇÕES
 # =============================================================================
