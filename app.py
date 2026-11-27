@@ -1938,6 +1938,40 @@ with aba_escolas:
 # ABA 2 - CURSOS TÉCNICOS
 # =============================================================================
 
+def exportar_tecnicos_excel_lotes(df, colunas):
+    from openpyxl import Workbook
+
+    saida = io.BytesIO()
+    workbook = Workbook(write_only=True)
+    planilha_numero = 1
+    planilha = workbook.create_sheet(title="Relatorio_1")
+    planilha.append(list(colunas))
+    linhas_na_planilha = 0
+    limite_linhas = 1_048_575
+
+    try:
+        for registro in df.loc[:, colunas].itertuples(index=False, name=None):
+            if linhas_na_planilha >= limite_linhas:
+                planilha_numero += 1
+                planilha = workbook.create_sheet(title=f"Relatorio_{planilha_numero}")
+                planilha.append(list(colunas))
+                linhas_na_planilha = 0
+
+            valores = []
+            for valor in registro:
+                if pd.isna(valor):
+                    valor = None
+                elif hasattr(valor, "item"):
+                    valor = valor.item()
+                valores.append(valor)
+
+            planilha.append(valores)
+            linhas_na_planilha += 1
+    finally:
+        workbook.save(saida)
+
+    return saida.getvalue()
+
 with aba_tecnicos:
     with st.expander("📶 **Painel de Filtros - Cursos Técnicos**", expanded=True):
         if st.button("🧹 Limpar Todos os Filtros", key="btn_limpar_a3"):
@@ -1951,7 +1985,8 @@ with aba_tecnicos:
                 "loc_g2", "cod_tec_busca_g2", "nome_tec_busca_g2",
                 "sel_qtd_tec_graf", "sel_mat_tec_graf",
                 "sel_area_graf", "sel_nome_curso_graf",
-                "ms_tec_confirmado"
+                "ms_tec_confirmado", "_assinatura_export_tecnicos",
+                "_excel_tecnicos_bytes"
             ]:
                 st.session_state.pop(chave, None)
 
@@ -2046,11 +2081,9 @@ with aba_tecnicos:
     if ano_tec:
         where_tec.append(f"{sql_int_safe('NU_ANO_CENSO')} IN ({', '.join(ano_tec)})")
     if nre_tec and nre_tec not in ["Todas", "Todos"] and "NO_NRE" in df_tecnicos_raw.columns:
-        valor_nre_tec = str(nre_tec).replace("'", "''")
-        where_tec.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{valor_nre_tec}'")
+        where_tec.append(f"TRIM(CAST(NO_NRE AS VARCHAR)) = '{nre_tec.replace('\'', '\'\'')}'")
     if mun_tec and mun_tec not in ["Todas", "Todos"]:
-        valor_mun_tec = str(mun_tec).replace("'", "''")
-        where_tec.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{valor_mun_tec}'")
+        where_tec.append(f"TRIM(CAST(NO_MUNICIPIO AS VARCHAR)) = '{mun_tec.replace('\'', '\'\'')}'")
     if dep_tec:
         deps_t = [int(d.split(' - ')[0]) for d in dep_tec]
         where_tec.append(f"{sql_int_safe('TP_DEPENDENCIA')} IN ({', '.join(map(str, deps_t))})")
@@ -2370,7 +2403,7 @@ with aba_tecnicos:
                 with g_t4: 
                     cod_tec_sel_g = criar_filtro_selectbox("Código INEP (MEC)", op_cod_g2, "cod_tec_busca_g2", "Todos")
                 with g_t5: 
-                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola", op_nome_g2, "nome_tec_busca_g2", "Todas", on_change=selecionar_inep_pelo_nome, args=(df_tecnicos, "nome_tec_busca_g2", "cod_tec_busca_g2", "Todas"))
+                    nome_tec_sel_g = criar_filtro_selectbox("Nome da Escola",op_nome_g2, "nome_tec_busca_g2", "Todas",on_change=selecionar_inep_pelo_nome,args=(df_tecnicos, "nome_tec_busca_g2", "cod_tec_busca_g2", "Todas"))
                 with g_t6: 
                     dep_tec_graf = criar_filtro_checkboxes("Rede", op_dep_g2, "dep_g2")
 
@@ -2552,28 +2585,53 @@ with aba_tecnicos:
             cols_finais_validas_tec = [c for c in cols_finais_tec if c in df_tecnicos.columns]
 
             df_tecnicos_exibir = df_tecnicos[cols_finais_validas_tec] if not df_tecnicos.empty and cols_finais_validas_tec else df_tecnicos
-            
+
+            assinatura_export_tec = (
+                tuple(where_tec),
+                tuple(cols_finais_validas_tec)
+            )
+
+            if st.session_state.get("_assinatura_export_tecnicos") != assinatura_export_tec:
+                st.session_state.pop("_excel_tecnicos_bytes", None)
+                st.session_state["_assinatura_export_tecnicos"] = assinatura_export_tec
+
             if not df_tecnicos_exibir.empty:
                 df_tecnicos_preview_tela = formatar_preview_anos_sem_variavel(
                     df_tecnicos_exibir.head(1000),
                     df_tecnicos_raw
                 )
-                excel_tecnicos_bytes = converter_df_para_excel(df_tecnicos_exibir)
-                st.info(f"💡 Apresenta os primeiros 1000 cursos. O botão de download exporta todos os {fmt_num(len(df_tecnicos_exibir))} registros.")
-                st.dataframe(df_tecnicos_preview_tela, use_container_width=True, height=500)
-                st.download_button(
-                    "📥 Baixar Cursos Excel (.xlsx)", 
-                    data=excel_tecnicos_bytes, 
-                    file_name="cursos_tecnicos.xlsx", 
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+                st.info(
+                    f"💡 A apresentar os primeiros 1000 cursos. "
+                    f"O botão abaixo prepara o Excel com todos os {fmt_num(len(df_tecnicos_exibir))} registros."
                 )
+                st.dataframe(df_tecnicos_preview_tela, use_container_width=True, height=500)
+
+                if st.button("📄 Preparar arquivo Excel", key="btn_preparar_excel_tecnicos"):
+                    with st.spinner("Preparando o arquivo para download..."):
+                        st.session_state["_excel_tecnicos_bytes"] = exportar_tecnicos_excel_lotes(
+                            df_tecnicos_exibir,
+                            cols_finais_validas_tec
+                        )
+
+                if st.session_state.get("_excel_tecnicos_bytes") is not None:
+                    st.download_button(
+                        "📥 Baixar Excel (.xlsx)",
+                        data=st.session_state["_excel_tecnicos_bytes"],
+                        file_name="cursos_tecnicos.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_excel_tecnicos"
+                    )
             else:
+                st.session_state.pop("_excel_tecnicos_bytes", None)
                 st.info("Nenhum resultado encontrado.")
 
         fragmento_tabela_tecnicos()
 
     except Exception as e:
         st.error(f"Erro: {e}")
+
+
 
 # =============================================================================
 # ABA 3 - OBSERVAÇÕES E LIMITAÇÕES
